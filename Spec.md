@@ -2316,4 +2316,6 @@ dl_config_t (32 bytes on 32-bit system):
 |---------|------|--------|-------------|
 | 1.0.0 | 2026-01-03 | Claude Code | Initial specification - DLL Services (ETG1000_3) |
 | 1.1.0 | 2026-01-03 | Claude Code | Added DLL Protocol (ETG1000_4) - Frame structure, datagrams, addressing |
+| 2.0.0 | 2026-01-03 | Claude Code | Added AL Services (ETG1000_5) - State machine, mailbox, sync manager |
+| 2.1.0 | 2026-01-03 | Claude Code | Added AL Protocols (ETG1000_6) - CoE, FoE, SoE, VoE, EoE, AoE |
 
