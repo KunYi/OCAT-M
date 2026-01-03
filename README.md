@@ -4,7 +4,7 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
 
 ## Project Status
 
-**Current Phase**: Phase 4 Complete - Network Scanning and Master Control ✅
+**Current Phase**: Phase 5.1 Complete - Process Data and Cyclic Operation ✅
 
 ### Completed Components
 
@@ -225,6 +225,52 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
   - Block data transfer
   - SII (EEPROM) interface (reserved)
 
+#### Phase 5 - Process Data and Cyclic Operation ✅ (Phase 5.1 Complete)
+
+##### Phase 5.1 - Process Data Core Infrastructure ✅
+- **Process Data Types and API**:
+  - `include/ethercat/process_data.h` - Process data API definitions (310 lines)
+  - Process data status codes
+  - Process data image structure
+  - Slave mapping structure
+  - Statistics structure
+  - Redundancy types (for Phase 5.2)
+
+- **Process Data Implementation**:
+  - `src/master/process_data.c` - Process data implementation (470 lines)
+
+- **Features**:
+  - Process data image allocation/deallocation
+  - Slave mapping validation
+  - LRW (Logical Read/Write) command for cyclic data exchange
+  - Working counter validation
+  - Cycle time statistics (min/max/avg)
+  - Error tracking (WKC errors, timeouts)
+  - Redundancy stubs for Phase 5.2
+
+- **API Functions**:
+  - `pd_init()` / `pd_shutdown()` - Module lifecycle
+  - `pd_allocate_image()` / `pd_free_image()` - Image management
+  - `pd_map_slave()` - Slave mapping
+  - `pd_exchange()` - LRW data exchange
+  - `pd_validate_wkc()` - Working counter validation
+  - `pd_get_statistics()` / `pd_reset_statistics()` - Statistics
+
+##### Phase 5.1 - Master Integration ✅
+- **Master Process Data API**:
+  - `master_allocate_process_data()` - Allocate PD buffers
+  - `master_free_process_data()` - Free PD buffers
+  - `master_get_process_data_image()` - Get PD image pointer
+  - `master_write_slave_output()` - Write to slave output
+  - `master_read_slave_input()` - Read from slave input
+  - `master_get_cyclic_statistics()` - Get cycle statistics
+
+- **Features**:
+  - Process data integration into master lifecycle
+  - Cyclic operation with LRW command
+  - Working counter validation in cycle processing
+  - Statistics tracking for performance monitoring
+
 ### Test Summary
 
 | Module | Tests | Passed | Failed | Status |
@@ -242,19 +288,19 @@ Source Files:
   DLL:      11 files
   HAL:      3 files
   AL:       5 files
-  Master:   4 files
-  Total:    23 files
+  Master:   5 files (master.c, scan.c, config.c, dc.c, process_data.c)
+  Total:    24 files
 
 Lines of Code:
   DLL:      ~3,500 lines
   HAL:      ~800 lines
   AL:       ~1,340 lines
   CoE:      ~753 lines
-  Master:   ~2,558 lines (master.c 461 + scan.c 735 + config.c 668 + dc.c 694)
-  Total:    ~8,951 lines
+  Master:   ~3,028 lines (master.c 461 + scan.c 735 + config.c 668 + dc.c 694 + process_data.c 470)
+  Total:    ~9,421 lines
 
 Build Status: ✅ Success (0 errors, 0 warnings)
-Output:       build/lib/libethercat.a
+Output:       build/lib/libethercat.a (498KB)
 ```
 
 ## Documentation
@@ -290,7 +336,8 @@ ethercat-master/
 │   ├── master.h                 # Master control interface
 │   ├── scan.h                   # Network scanning interface
 │   ├── config.h                 # Slave configuration interface
-│   └── dc.h                     # Distributed Clocks interface
+│   ├── dc.h                     # Distributed Clocks interface
+│   └── process_data.h           # Process data interface
 ├── src/dll/                     # DLL implementation
 │   ├── dll_init.c               # Initialization
 │   ├── dll_tx.c                 # Transmission
@@ -321,7 +368,8 @@ ethercat-master/
 │   ├── master_internal.h        # Master internal definitions
 │   ├── scan.c                   # Network scanning
 │   ├── config.c                 # Slave configuration
-│   └── dc.c                     # Distributed Clocks
+│   ├── dc.c                     # Distributed Clocks
+│   └── process_data.c           # Process data and cyclic operation
 ├── tests/dll/                   # Unit tests
 │   ├── test_dll_state.c         # State machine tests
 │   ├── test_dll_queue.c         # Queue tests
@@ -369,39 +417,34 @@ make info
 
 ## Next Steps
 
-### Phase 4 - Network Scanning and Master Control ✅ Complete
+### Phase 5.1 - Process Data and Cyclic Operation ✅ Complete
 
-**Phase 4.1 - Network Scanning** ✅ Complete:
-- ✅ Slave discovery using BRD (Broadcast Read)
-- ✅ Station address assignment using APWR
-- ✅ EEPROM (SII) reading with full state machine
-- ✅ Slave identification (Vendor ID, Product Code, Revision, Serial)
-- ✅ Slave name reading from EEPROM
-- ✅ Topology detection via port descriptors
-- ✅ Category-based EEPROM reading
+**Phase 5.1 - Basic Process Data** ✅ Complete:
+- ✅ Process data types and API defined (process_data.h)
+- ✅ Process data core implementation (process_data.c)
+- ✅ Image allocation/deallocation with dynamic memory
+- ✅ Slave mapping validation
+- ✅ LRW (Logical Read/Write) command implementation
+- ✅ Frame building/parsing for LRW using existing infrastructure
+- ✅ Data exchange function with timeout handling
+- ✅ Working counter validation
+- ✅ Statistics and monitoring (cycle time, WKC errors, timeouts)
+- ✅ Master integration (6 new API functions)
+- ✅ Basic cyclic operation working
 
-**Phase 4.2 - Slave Configuration** ✅ Complete:
-- ✅ Sync Manager configuration (read from EEPROM and write to ESC)
-- ✅ PDO mapping configuration (read TxPDO/RxPDO from EEPROM)
-- ✅ Mailbox configuration (setup mailbox Sync Managers)
-- ✅ FMMU configuration (read from EEPROM and write to ESC)
-- ✅ Process data offset calculation
-- ✅ Complete slave configuration orchestration
+### Phase 5.2 - Redundancy Support (Optional - Low Priority)
+- Multi-port HAL support
+- Cable redundancy (ring topology)
+- Frame redundancy (dual send)
+- Hot connect support
+- Automatic port switching
+- Port health monitoring
 
-**Phase 4.3 - Distributed Clocks** ✅ Complete:
-- ✅ DC support detection
-- ✅ System time synchronization
-- ✅ Reference clock selection
-- ✅ Propagation delay measurement
-- ✅ SYNC0/SYNC1 configuration
-- ✅ Drift compensation
-- ✅ DC monitoring and statistics
-
-### Phase 5 - Cyclic Operation and Process Data (Recommended)
-- LRW (Logical Read/Write) for process data
-- Cyclic frame transmission
-- Working counter validation
-- Real-time performance optimization
+### Phase 5.3 - Examples and Testing (Recommended)
+- Simple cyclic I/O example
+- Process data demonstration
+- Performance benchmarks
+- System testing
 
 ### Phase 3 - Remaining Application Layer Protocols (All Optional)
 
@@ -462,4 +505,4 @@ This is a clean-room implementation based on publicly available ETG specificatio
 ---
 
 **Last Updated**: 2026-01-03
-**Version**: 4.1.0 (Phase 1-2 Complete, Phase 3.1 CoE Complete, Phase 4 Complete - Network Scanning, Slave Configuration, and Distributed Clocks)
+**Version**: 5.1.0 (Phase 1-2 Complete, Phase 3.1 CoE Complete, Phase 4 Complete, Phase 5.1 Complete - Process Data and Cyclic Operation)

@@ -13,6 +13,7 @@
 #include "ethercat/al.h"
 #include "ethercat/dll.h"
 #include "ethercat/hal.h"
+#include "ethercat/process_data.h"
 #include <stdbool.h>
 
 #ifdef __cplusplus
@@ -87,6 +88,11 @@ typedef struct {
 
     /* Topology */
     network_topology_t topology;        /**< Network topology */
+
+    /* Process data */
+    pd_image_t pd_image;                /**< Process data image */
+    pd_slave_mapping_t pd_mappings[MASTER_MAX_SLAVES]; /**< Slave mappings */
+    bool pd_allocated;                  /**< Process data allocated */
 
     /* Cyclic operation */
     bool cyclic_active;                 /**< Cyclic operation active */

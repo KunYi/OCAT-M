@@ -13,6 +13,7 @@
 #include "ethercat/coe.h"
 #include "ethercat/dll.h"
 #include "ethercat/hal.h"
+#include "ethercat/process_data.h"
 #include "master_internal.h"
 #include <string.h>
 #include <stdlib.h>
@@ -20,6 +21,8 @@
 /* ========================================================================== */
 /* Global Master Context                                                     */
 /* ========================================================================== */
+
+#define PD_DEFAULT_TIMEOUT_MS 100  /**< Default process data timeout (ms) */
 
 static master_context_t g_master_context = {0};
 
@@ -138,6 +141,19 @@ master_status_t master_init(const master_config_t* config)
         return MASTER_STATUS_ERROR;
     }
 
+    /* Initialize process data module */
+    pd_status_t pd_status = pd_init();
+    if (pd_status != PD_STATUS_SUCCESS) {
+        dc_shutdown();
+        config_shutdown();
+        scan_shutdown();
+        coe_shutdown();
+        al_shutdown();
+        dl_shutdown();
+        hal_shutdown();
+        return MASTER_STATUS_ERROR;
+    }
+
     g_master_context.state = MASTER_STATE_IDLE;
     g_master_context.initialized = true;
 
@@ -155,7 +171,13 @@ master_status_t master_shutdown(void)
         master_stop_cyclic();
     }
 
+    /* Free process data if allocated */
+    if (g_master_context.pd_allocated) {
+        master_free_process_data();
+    }
+
     /* Shutdown all modules */
+    pd_shutdown();
     dc_shutdown();
     config_shutdown();
     scan_shutdown();
@@ -500,11 +522,176 @@ master_status_t master_process_cycle(void)
         return MASTER_STATUS_ERROR;
     }
 
-    /* TODO: Send process data frame (LRW) */
-    /* TODO: Receive process data response */
-    /* TODO: Check working counter */
+    /* Check if process data is allocated */
+    if (!g_master_context.pd_allocated) {
+        return MASTER_STATUS_ERROR;
+    }
+
+    /* Exchange process data using LRW command */
+    uint16_t working_counter = 0;
+    pd_status_t status = pd_exchange(&g_master_context.pd_image,
+                                      &working_counter,
+                                      PD_DEFAULT_TIMEOUT_MS);
+
+    if (status != PD_STATUS_SUCCESS) {
+        return MASTER_STATUS_ERROR;
+    }
+
+    /* Validate working counter */
+    if (!pd_validate_wkc(g_master_context.topology.working_counter_expected, working_counter)) {
+        /* WKC error, but continue operation */
+    }
 
     g_master_context.cycle_counter++;
+
+    return MASTER_STATUS_SUCCESS;
+}
+
+/* ========================================================================== */
+/* Process Data Functions                                                    */
+/* ========================================================================== */
+
+master_status_t master_allocate_process_data(const pd_redundancy_config_t* redundancy)
+{
+    if (!g_master_context.initialized) {
+        return MASTER_STATUS_NOT_INITIALIZED;
+    }
+
+    if (g_master_context.pd_allocated) {
+        return MASTER_STATUS_ERROR;
+    }
+
+    /* Calculate total input/output sizes from slave configuration */
+    uint32_t total_input_size = 0;
+    uint32_t total_output_size = 0;
+
+    for (uint16_t i = 0; i < g_master_context.slave_count; i++) {
+        /* TODO: Get actual sizes from slave configuration */
+        /* For now, use placeholder values */
+        total_input_size += 64;   /* Placeholder */
+        total_output_size += 64;  /* Placeholder */
+    }
+
+    /* Allocate process data image */
+    pd_status_t status = pd_allocate_image(&g_master_context.pd_image,
+                                            total_input_size,
+                                            total_output_size,
+                                            redundancy);
+
+    if (status != PD_STATUS_SUCCESS) {
+        return MASTER_STATUS_ERROR;
+    }
+
+    g_master_context.pd_allocated = true;
+
+    return MASTER_STATUS_SUCCESS;
+}
+
+master_status_t master_free_process_data(void)
+{
+    if (!g_master_context.initialized) {
+        return MASTER_STATUS_NOT_INITIALIZED;
+    }
+
+    if (!g_master_context.pd_allocated) {
+        return MASTER_STATUS_SUCCESS;
+    }
+
+    pd_status_t status = pd_free_image(&g_master_context.pd_image);
+    if (status != PD_STATUS_SUCCESS) {
+        return MASTER_STATUS_ERROR;
+    }
+
+    g_master_context.pd_allocated = false;
+
+    return MASTER_STATUS_SUCCESS;
+}
+
+master_status_t master_get_process_data_image(pd_image_t** image)
+{
+    if (!g_master_context.initialized || image == NULL) {
+        return MASTER_STATUS_INVALID_PARAM;
+    }
+
+    if (!g_master_context.pd_allocated) {
+        return MASTER_STATUS_ERROR;
+    }
+
+    *image = &g_master_context.pd_image;
+    return MASTER_STATUS_SUCCESS;
+}
+
+master_status_t master_write_slave_output(uint16_t position,
+                                            const uint8_t* data,
+                                            uint32_t length)
+{
+    if (!g_master_context.initialized || data == NULL) {
+        return MASTER_STATUS_INVALID_PARAM;
+    }
+
+    if (position >= g_master_context.slave_count) {
+        return MASTER_STATUS_INVALID_PARAM;
+    }
+
+    if (!g_master_context.pd_allocated) {
+        return MASTER_STATUS_ERROR;
+    }
+
+    /* Get slave mapping */
+    pd_slave_mapping_t* mapping = &g_master_context.pd_mappings[position];
+
+    if (length > mapping->output_size) {
+        return MASTER_STATUS_INVALID_PARAM;
+    }
+
+    /* Copy data to output buffer */
+    memcpy(g_master_context.pd_image.output_data + mapping->output_offset,
+           data, length);
+
+    return MASTER_STATUS_SUCCESS;
+}
+
+master_status_t master_read_slave_input(uint16_t position,
+                                         uint8_t* data,
+                                         uint32_t length)
+{
+    if (!g_master_context.initialized || data == NULL) {
+        return MASTER_STATUS_INVALID_PARAM;
+    }
+
+    if (position >= g_master_context.slave_count) {
+        return MASTER_STATUS_INVALID_PARAM;
+    }
+
+    if (!g_master_context.pd_allocated) {
+        return MASTER_STATUS_ERROR;
+    }
+
+    /* Get slave mapping */
+    pd_slave_mapping_t* mapping = &g_master_context.pd_mappings[position];
+
+    if (length > mapping->input_size) {
+        return MASTER_STATUS_INVALID_PARAM;
+    }
+
+    /* Copy data from input buffer */
+    memcpy(data,
+           g_master_context.pd_image.input_data + mapping->input_offset,
+           length);
+
+    return MASTER_STATUS_SUCCESS;
+}
+
+master_status_t master_get_cyclic_statistics(pd_statistics_t* stats)
+{
+    if (!g_master_context.initialized || stats == NULL) {
+        return MASTER_STATUS_INVALID_PARAM;
+    }
+
+    pd_status_t status = pd_get_statistics(stats);
+    if (status != PD_STATUS_SUCCESS) {
+        return MASTER_STATUS_ERROR;
+    }
 
     return MASTER_STATUS_SUCCESS;
 }

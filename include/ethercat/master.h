@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include "process_data.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -221,6 +222,63 @@ master_status_t master_stop_cyclic(void);
  * @return MASTER_STATUS_SUCCESS on success, error code otherwise
  */
 master_status_t master_process_cycle(void);
+
+/**
+ * @brief Allocate process data buffers
+ *
+ * This function allocates input/output buffers based on slave configuration.
+ *
+ * @param redundancy Redundancy configuration (NULL for no redundancy)
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_allocate_process_data(const pd_redundancy_config_t* redundancy);
+
+/**
+ * @brief Free process data buffers
+ *
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_free_process_data(void);
+
+/**
+ * @brief Get process data image
+ *
+ * @param image Pointer to receive process data image pointer
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_get_process_data_image(pd_image_t** image);
+
+/**
+ * @brief Write output process data for a slave
+ *
+ * @param position Slave position (0-based)
+ * @param data Pointer to output data
+ * @param length Data length in bytes
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_write_slave_output(uint16_t position,
+                                            const uint8_t* data,
+                                            uint32_t length);
+
+/**
+ * @brief Read input process data from a slave
+ *
+ * @param position Slave position (0-based)
+ * @param data Pointer to receive input data
+ * @param length Data length in bytes
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_read_slave_input(uint16_t position,
+                                         uint8_t* data,
+                                         uint32_t length);
+
+/**
+ * @brief Get cyclic operation statistics
+ *
+ * @param stats Pointer to receive statistics
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_get_cyclic_statistics(pd_statistics_t* stats);
 
 /**
  * @brief Get master version string
