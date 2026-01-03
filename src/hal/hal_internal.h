@@ -21,15 +21,16 @@ extern "C" {
 /* HAL Context Structure                                                      */
 /* ========================================================================== */
 
+#define HAL_MAX_PORTS 2
+
 typedef struct {
     bool initialized;
     uint8_t port_count;                      /**< Number of ports (1 or 2) */
-    hal_config_t config;                     /**< Primary port configuration */
-    hal_config_t config_secondary;           /**< Secondary port configuration (if multiport) */
+    hal_config_t config[HAL_MAX_PORTS];      /**< Port configurations */
     hal_callbacks_t callbacks;
-    hal_statistics_t statistics;
-    hal_device_info_t device_info;
-    void* platform_context;                  /**< Platform-specific context */
+    hal_statistics_t statistics[HAL_MAX_PORTS]; /**< Per-port statistics */
+    hal_device_info_t device_info[HAL_MAX_PORTS]; /**< Per-port device info */
+    void* platform_context[HAL_MAX_PORTS];   /**< Platform-specific contexts per port */
 } hal_context_t;
 
 /* ========================================================================== */

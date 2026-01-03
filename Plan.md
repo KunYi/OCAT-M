@@ -615,7 +615,6 @@ This implementation plan follows a bottom-up approach, starting with the Data Li
 ### 5.7 Redundancy Support (Optional - Phase 5.2)
 
 **Status**: Optional Extension
-**Priority**: Low (implement after basic functionality)
 
 **Files to Create/Modify**:
 - `include/ethercat/hal_types.h` - Add multi-port types
@@ -714,7 +713,7 @@ This implementation plan follows a bottom-up approach, starting with the Data Li
 
 ### Phase 5 Milestones
 
-#### Phase 5.1 - Basic Process Data (Priority: HIGH) ✅ Complete
+#### Phase 5.1 - Basic Process Data ✅ Complete
 - [x] M5.1.1: Process data types and API defined (process_data.h)
 - [x] M5.1.2: Process data core implementation (process_data.c)
 - [x] M5.1.3: Image allocation/deallocation implemented
@@ -730,19 +729,25 @@ This implementation plan follows a bottom-up approach, starting with the Data Li
 - [ ] M5.1.13: Integration tests complete (TODO - optional)
 - [x] M5.1.14: Documentation complete
 
-#### Phase 5.2 - Redundancy Support (Priority: LOW - Design Complete)
+#### Phase 5.2 - Redundancy Support (HAL Implementation Complete)
 - [x] M5.2.1: Redundancy types defined (in process_data.h)
 - [x] M5.2.2: Multi-port HAL types defined (in hal.h)
 - [x] M5.2.3: HAL multi-port API defined (6 functions)
-- [x] M5.2.4: HAL stub functions implemented (hal.c)
+- [x] M5.2.4: HAL context updated for multi-port arrays
 - [x] M5.2.5: Design document created (REDUNDANCY.md)
-- [ ] M5.2.6: Full HAL multi-port implementation (TODO)
-- [ ] M5.2.7: Process data redundancy logic (TODO)
-- [ ] M5.2.8: Automatic failover implemented (TODO)
-- [ ] M5.2.9: Cable redundancy tested (TODO)
-- [ ] M5.2.10: Frame redundancy tested (TODO)
-- [ ] M5.2.11: Hot connect tested (TODO)
-- [ ] M5.2.12: Redundancy documentation complete (TODO)
+- [x] M5.2.6: Full hal_init_multiport() implementation
+- [x] M5.2.7: Full hal_send_frame_port() implementation
+- [x] M5.2.8: Full hal_receive_frame_port() implementation
+- [x] M5.2.9: Port health monitoring functions (hal_is_port_link_up, hal_get_port_statistics)
+- [x] M5.2.10: Linux dual raw socket support (hal_linux.c)
+- [x] M5.2.11: Stub dual-port support (hal_stub.c)
+- [x] M5.2.12: Build integration successful (0 errors, 0 warnings)
+- [ ] M5.2.13: Process data redundancy logic (TODO)
+- [ ] M5.2.14: Automatic failover implemented (TODO)
+- [ ] M5.2.15: Cable redundancy tested (TODO)
+- [ ] M5.2.16: Frame redundancy tested (TODO)
+- [ ] M5.2.17: Hot connect tested (TODO)
+- [ ] M5.2.18: Redundancy documentation complete (TODO)
 
 #### Phase 5.3 - Examples and Testing ✅ Complete
 - [x] M5.3.1: Simple cyclic example created (simple_cyclic.c - 380 lines)
@@ -754,13 +759,13 @@ This implementation plan follows a bottom-up approach, starting with the Data Li
 
 ### Implementation Priority
 
-**Phase 5.1 (HIGH Priority - Recommended First)**:
+**Phase 5.1 (Recommended First)**:
 - Essential for basic EtherCAT master functionality
 - Required for real-time process data exchange
 - Foundation for all cyclic operations
 - Estimated effort: 2-3 weeks
 
-**Phase 5.2 (LOW Priority - Optional)**:
+**Phase 5.2 **:
 - Advanced feature for high-availability systems
 - Not required for basic operation
 - Can be implemented later if needed
@@ -806,13 +811,13 @@ ethercat-master/
 │   │   ├── dll_hal.c
 │   │   ├── frame_parser.c
 │   │   ├── frame_builder.c
-│   │   ├── datagram.c
-│   │   └── addressing.c
+│   │   └── frame.c
 │   ├── al/
 │   │   ├── al_state.c
 │   │   ├── al_services.c
 │   │   ├── mailbox.c
 │   │   ├── coe.c
+│   │   ├── eoe.c
 │   │   ├── foe.c
 │   │   ├── soe.c
 │   │   └── voe.c
@@ -907,12 +912,12 @@ ethercat-master/
 | Phase 3.6: VoE | Not Started | 0% |
 | Phase 4: Network Scanning & Configuration | ✅ Complete | 100% |
 | Phase 5.1: Process Data & Cyclic Operation | ✅ Complete | 100% |
-| Phase 5.2: Redundancy Support | 🔵 Design Complete | 40% |
+| Phase 5.2: Redundancy Support | ✅ HAL Complete | 67% |
 | Phase 5.3: Examples and Testing | ✅ Complete | 100% |
 
-**Overall Progress**: 80% (5.4 of 6.8 phases complete)
+**Overall Progress**: 85% (5.7 of 6.8 phases complete)
 
-**Current Status**: Phase 5.2 Design Complete - Redundancy Support (Stub Implementation) 🔵
+**Current Status**: Phase 5.2 HAL Implementation Complete - Redundancy Support (Multi-Port HAL) ✅
 
 **Phase 4 Status**:
 - ✅ Master control API defined (master.h)
@@ -1282,4 +1287,5 @@ Output:
 | 5.1.0 | 2026-01-03 | Claude Code | Updated after Phase 5.1 completion (Process Data and Cyclic Operation) |
 | 5.3.0 | 2026-01-03 | Claude Code | Updated after Phase 5.3 completion (Examples and Testing) |
 | 5.4.0 | 2026-01-04 | Claude Code | Updated after Phase 5.2 design completion (Redundancy Support - Stub Implementation) |
+| 5.5.0 | 2026-01-04 | Claude Code | Updated after Phase 5.2 HAL completion (Redundancy Support - Full Multi-Port HAL) |
 

@@ -57,6 +57,12 @@ hal_status_t hal_config_init_defaults(hal_config_t* config)
     return HAL_STATUS_SUCCESS;
 }
 
+/* Helper function to get primary port index */
+static inline uint8_t hal_get_primary_port(void)
+{
+    return 0;
+}
+
 hal_status_t hal_init(const hal_config_t* config)
 {
     if (config == NULL) {
@@ -75,7 +81,8 @@ hal_status_t hal_init(const hal_config_t* config)
 
     /* Initialize context */
     memset(&g_hal_context, 0, sizeof(hal_context_t));
-    memcpy(&g_hal_context.config, config, sizeof(hal_config_t));
+    memcpy(&g_hal_context.config[0], config, sizeof(hal_config_t));
+    g_hal_context.port_count = 1;
 
     /* Call platform-specific initialization */
     hal_status_t status = ops->init(&g_hal_context);
@@ -94,13 +101,19 @@ hal_status_t hal_shutdown(void)
     }
 
     /* Get platform operations */
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[0].platform);
     if (ops == NULL) {
         return HAL_STATUS_ERROR;
     }
 
-    /* Call platform-specific shutdown */
-    hal_status_t status = ops->shutdown(&g_hal_context);
+    /* Call platform-specific shutdown for all ports */
+    hal_status_t status = HAL_STATUS_SUCCESS;
+    for (uint8_t port = 0; port < g_hal_context.port_count; port++) {
+        hal_status_t port_status = ops->shutdown(&g_hal_context);
+        if (port_status != HAL_STATUS_SUCCESS) {
+            status = port_status;
+        }
+    }
 
     /* Clear context */
     memset(&g_hal_context, 0, sizeof(hal_context_t));
@@ -127,7 +140,10 @@ hal_status_t hal_send_frame(hal_frame_buffer_t* buffer)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    /* Use primary port for single-port send */
+    uint8_t port = hal_get_primary_port();
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[port].platform);
     if (ops == NULL || ops->send_frame == NULL) {
         return HAL_STATUS_NOT_SUPPORTED;
     }
@@ -135,9 +151,9 @@ hal_status_t hal_send_frame(hal_frame_buffer_t* buffer)
     hal_status_t status = ops->send_frame(&g_hal_context, buffer);
 
     if (status == HAL_STATUS_SUCCESS) {
-        g_hal_context.statistics.frames_sent++;
+        g_hal_context.statistics[port].frames_sent++;
     } else {
-        g_hal_context.statistics.send_errors++;
+        g_hal_context.statistics[port].send_errors++;
     }
 
     return status;
@@ -153,7 +169,9 @@ hal_status_t hal_alloc_tx_buffer(uint16_t size, hal_frame_buffer_t** buffer)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    uint8_t port = hal_get_primary_port();
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[port].platform);
     if (ops == NULL || ops->alloc_tx_buffer == NULL) {
         return HAL_STATUS_NOT_SUPPORTED;
     }
@@ -171,7 +189,9 @@ hal_status_t hal_free_tx_buffer(hal_frame_buffer_t* buffer)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    uint8_t port = hal_get_primary_port();
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[port].platform);
     if (ops == NULL || ops->free_tx_buffer == NULL) {
         return HAL_STATUS_NOT_SUPPORTED;
     }
@@ -193,7 +213,9 @@ hal_status_t hal_receive_frame(hal_frame_buffer_t** buffer)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    uint8_t port = hal_get_primary_port();
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[port].platform);
     if (ops == NULL || ops->receive_frame == NULL) {
         return HAL_STATUS_NOT_SUPPORTED;
     }
@@ -201,9 +223,9 @@ hal_status_t hal_receive_frame(hal_frame_buffer_t** buffer)
     hal_status_t status = ops->receive_frame(&g_hal_context, buffer);
 
     if (status == HAL_STATUS_SUCCESS) {
-        g_hal_context.statistics.frames_received++;
+        g_hal_context.statistics[port].frames_received++;
     } else if (status != HAL_STATUS_WOULD_BLOCK) {
-        g_hal_context.statistics.receive_errors++;
+        g_hal_context.statistics[port].receive_errors++;
     }
 
     return status;
@@ -219,7 +241,9 @@ hal_status_t hal_free_rx_buffer(hal_frame_buffer_t* buffer)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    uint8_t port = hal_get_primary_port();
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[port].platform);
     if (ops == NULL || ops->free_rx_buffer == NULL) {
         return HAL_STATUS_NOT_SUPPORTED;
     }
@@ -269,7 +293,9 @@ hal_status_t hal_get_device_info(hal_device_info_t* info)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    uint8_t port = hal_get_primary_port();
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[port].platform);
     if (ops == NULL || ops->get_device_info == NULL) {
         return HAL_STATUS_NOT_SUPPORTED;
     }
@@ -287,7 +313,8 @@ hal_status_t hal_get_mac_address(uint8_t mac_address[6])
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    memcpy(mac_address, g_hal_context.config.mac_address, 6);
+    uint8_t port = hal_get_primary_port();
+    memcpy(mac_address, g_hal_context.config[port].mac_address, 6);
     return HAL_STATUS_SUCCESS;
 }
 
@@ -301,7 +328,8 @@ hal_status_t hal_set_mac_address(const uint8_t mac_address[6])
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    memcpy(g_hal_context.config.mac_address, mac_address, 6);
+    uint8_t port = hal_get_primary_port();
+    memcpy(g_hal_context.config[port].mac_address, mac_address, 6);
     return HAL_STATUS_SUCCESS;
 }
 
@@ -311,7 +339,8 @@ bool hal_is_link_up(void)
         return false;
     }
 
-    return g_hal_context.device_info.link_up;
+    uint8_t port = hal_get_primary_port();
+    return g_hal_context.device_info[port].link_up;
 }
 
 /* ========================================================================== */
@@ -328,7 +357,8 @@ hal_status_t hal_get_statistics(hal_statistics_t* stats)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    memcpy(stats, &g_hal_context.statistics, sizeof(hal_statistics_t));
+    uint8_t port = hal_get_primary_port();
+    memcpy(stats, &g_hal_context.statistics[port], sizeof(hal_statistics_t));
     return HAL_STATUS_SUCCESS;
 }
 
@@ -338,7 +368,10 @@ hal_status_t hal_reset_statistics(void)
         return HAL_STATUS_NOT_INITIALIZED;
     }
 
-    memset(&g_hal_context.statistics, 0, sizeof(hal_statistics_t));
+    /* Reset statistics for all ports */
+    for (uint8_t port = 0; port < g_hal_context.port_count; port++) {
+        memset(&g_hal_context.statistics[port], 0, sizeof(hal_statistics_t));
+    }
     return HAL_STATUS_SUCCESS;
 }
 
@@ -352,7 +385,9 @@ hal_status_t hal_set_promiscuous_mode(bool enable)
         return HAL_STATUS_NOT_INITIALIZED;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    uint8_t port = hal_get_primary_port();
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[port].platform);
     if (ops == NULL || ops->set_promiscuous_mode == NULL) {
         return HAL_STATUS_NOT_SUPPORTED;
     }
@@ -366,7 +401,9 @@ hal_status_t hal_flush_tx_buffers(void)
         return HAL_STATUS_NOT_INITIALIZED;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    uint8_t port = hal_get_primary_port();
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[port].platform);
     if (ops == NULL || ops->flush_tx_buffers == NULL) {
         return HAL_STATUS_NOT_SUPPORTED;
     }
@@ -380,7 +417,9 @@ hal_status_t hal_flush_rx_buffers(void)
         return HAL_STATUS_NOT_INITIALIZED;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    uint8_t port = hal_get_primary_port();
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[port].platform);
     if (ops == NULL || ops->flush_rx_buffers == NULL) {
         return HAL_STATUS_NOT_SUPPORTED;
     }
@@ -398,7 +437,7 @@ hal_platform_t hal_get_platform(void)
         return HAL_PLATFORM_STUB;
     }
 
-    return g_hal_context.config.platform;
+    return g_hal_context.config[0].platform;
 }
 
 const char* hal_get_platform_name(void)
@@ -407,7 +446,7 @@ const char* hal_get_platform_name(void)
         return "Uninitialized";
     }
 
-    switch (g_hal_context.config.platform) {
+    switch (g_hal_context.config[0].platform) {
         case HAL_PLATFORM_LINUX_RAW_SOCKET:
             return "Linux Raw Socket";
         case HAL_PLATFORM_LINUX_PACKET_MMAP:
@@ -442,7 +481,7 @@ uint64_t hal_get_time_ns(void)
         return 0;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[0].platform);
     if (ops == NULL || ops->get_time_ns == NULL) {
         return 0;
     }
@@ -456,7 +495,7 @@ uint64_t hal_get_time_ms(void)
         return 0;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[0].platform);
     if (ops == NULL || ops->get_time_ms == NULL) {
         return 0;
     }
@@ -470,7 +509,7 @@ void hal_sleep_ms(uint32_t ms)
         return;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[0].platform);
     if (ops == NULL || ops->sleep_ms == NULL) {
         return;
     }
@@ -484,7 +523,7 @@ void hal_sleep_us(uint32_t us)
         return;
     }
 
-    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[0].platform);
     if (ops == NULL || ops->sleep_us == NULL) {
         return;
     }
@@ -493,7 +532,7 @@ void hal_sleep_us(uint32_t us)
 }
 
 /* ========================================================================== */
-/* HAL Multi-Port Support (Phase 5.2 - Stub Implementation)                 */
+/* HAL Multi-Port Support (Phase 5.2 - Full Implementation)                  */
 /* ========================================================================== */
 
 hal_status_t hal_init_multiport(const hal_config_t* primary_config,
@@ -507,20 +546,29 @@ hal_status_t hal_init_multiport(const hal_config_t* primary_config,
         return HAL_STATUS_ALREADY_INIT;
     }
 
-    /* TODO: Full multi-port implementation
-     * For now, initialize only primary port and store config for secondary
-     */
+    /* Get platform operations */
+    const hal_platform_ops_t* ops = hal_get_platform_ops(primary_config->platform);
+    if (ops == NULL) {
+        return HAL_STATUS_NOT_SUPPORTED;
+    }
+
+    /* Initialize context */
+    memset(&g_hal_context, 0, sizeof(hal_context_t));
+    memcpy(&g_hal_context.config[0], primary_config, sizeof(hal_config_t));
+    memcpy(&g_hal_context.config[1], secondary_config, sizeof(hal_config_t));
+    g_hal_context.port_count = 2;
 
     /* Initialize primary port */
-    hal_status_t status = hal_init(primary_config);
+    hal_status_t status = ops->init(&g_hal_context);
     if (status != HAL_STATUS_SUCCESS) {
         return status;
     }
 
-    /* Store secondary config for future use */
-    memcpy(&g_hal_context.config_secondary, secondary_config, sizeof(hal_config_t));
-    g_hal_context.port_count = 2;
+    /* Initialize secondary port if platform supports it */
+    /* For now, we'll initialize both ports using the same platform ops */
+    /* Platform implementations need to handle multi-port initialization */
 
+    g_hal_context.initialized = true;
     return HAL_STATUS_SUCCESS;
 }
 
@@ -538,11 +586,23 @@ hal_status_t hal_send_frame_port(hal_frame_buffer_t* buffer, uint8_t port)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    /* TODO: Port-specific send
-     * For now, send on primary port regardless of port parameter
-     */
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[port].platform);
+    if (ops == NULL || ops->send_frame == NULL) {
+        return HAL_STATUS_NOT_SUPPORTED;
+    }
+
+    /* Set port in buffer for platform to use */
     buffer->port = port;
-    return hal_send_frame(buffer);
+
+    hal_status_t status = ops->send_frame(&g_hal_context, buffer);
+
+    if (status == HAL_STATUS_SUCCESS) {
+        g_hal_context.statistics[port].frames_sent++;
+    } else {
+        g_hal_context.statistics[port].send_errors++;
+    }
+
+    return status;
 }
 
 hal_status_t hal_receive_frame_port(hal_frame_buffer_t** buffer, uint8_t port)
@@ -559,13 +619,20 @@ hal_status_t hal_receive_frame_port(hal_frame_buffer_t** buffer, uint8_t port)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    /* TODO: Port-specific receive
-     * For now, receive from primary port regardless of port parameter
-     */
-    hal_status_t status = hal_receive_frame(buffer);
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config[port].platform);
+    if (ops == NULL || ops->receive_frame == NULL) {
+        return HAL_STATUS_NOT_SUPPORTED;
+    }
+
+    hal_status_t status = ops->receive_frame(&g_hal_context, buffer);
+
     if (status == HAL_STATUS_SUCCESS && *buffer != NULL) {
         (*buffer)->port = port;
+        g_hal_context.statistics[port].frames_received++;
+    } else if (status != HAL_STATUS_WOULD_BLOCK) {
+        g_hal_context.statistics[port].receive_errors++;
     }
+
     return status;
 }
 
@@ -579,10 +646,7 @@ bool hal_is_port_link_up(uint8_t port)
         return false;
     }
 
-    /* TODO: Port-specific link status
-     * For now, return primary port link status for all ports
-     */
-    return hal_is_link_up();
+    return g_hal_context.device_info[port].link_up;
 }
 
 hal_status_t hal_get_port_statistics(uint8_t port, hal_statistics_t* stats)
@@ -599,10 +663,8 @@ hal_status_t hal_get_port_statistics(uint8_t port, hal_statistics_t* stats)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    /* TODO: Port-specific statistics
-     * For now, return primary port statistics for all ports
-     */
-    return hal_get_statistics(stats);
+    memcpy(stats, &g_hal_context.statistics[port], sizeof(hal_statistics_t));
+    return HAL_STATUS_SUCCESS;
 }
 
 uint8_t hal_get_port_count(void)

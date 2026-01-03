@@ -60,133 +60,223 @@ static hal_status_t hal_linux_init(hal_context_t* ctx)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    /* Allocate Linux context */
-    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)calloc(1, sizeof(hal_linux_context_t));
-    if (linux_ctx == NULL) {
-        return HAL_STATUS_ERROR;
-    }
-
-    /* Create raw socket */
-    linux_ctx->socket_fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-    if (linux_ctx->socket_fd < 0) {
-        free(linux_ctx);
-        return HAL_STATUS_ERROR;
-    }
-
-    /* Get interface index */
-    struct ifreq ifr;
-    memset(&ifr, 0, sizeof(ifr));
-    strncpy(ifr.ifr_name, ctx->config.interface_name, IF_NAMESIZE - 1);
-
-    if (ioctl(linux_ctx->socket_fd, SIOCGIFINDEX, &ifr) < 0) {
-        close(linux_ctx->socket_fd);
-        free(linux_ctx);
-        return HAL_STATUS_NO_DEVICE;
-    }
-    linux_ctx->ifindex = ifr.ifr_ifindex;
-
-    /* Get MAC address */
-    if (ioctl(linux_ctx->socket_fd, SIOCGIFHWADDR, &ifr) < 0) {
-        close(linux_ctx->socket_fd);
-        free(linux_ctx);
-        return HAL_STATUS_ERROR;
-    }
-    memcpy(ctx->config.mac_address, ifr.ifr_hwaddr.sa_data, 6);
-
-    /* Set promiscuous mode if requested */
-    if (ctx->config.promiscuous_mode) {
-        struct packet_mreq mreq;
-        memset(&mreq, 0, sizeof(mreq));
-        mreq.mr_ifindex = linux_ctx->ifindex;
-        mreq.mr_type = PACKET_MR_PROMISC;
-
-        if (setsockopt(linux_ctx->socket_fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP,
-                       &mreq, sizeof(mreq)) < 0) {
-            close(linux_ctx->socket_fd);
-            free(linux_ctx);
+    /* Initialize each configured port */
+    for (uint8_t port = 0; port < ctx->port_count; port++) {
+        /* Allocate Linux context for this port */
+        hal_linux_context_t* linux_ctx = (hal_linux_context_t*)calloc(1, sizeof(hal_linux_context_t));
+        if (linux_ctx == NULL) {
+            /* Cleanup previously allocated ports */
+            for (uint8_t i = 0; i < port; i++) {
+                if (ctx->platform_context[i] != NULL) {
+                    hal_linux_context_t* cleanup_ctx = (hal_linux_context_t*)ctx->platform_context[i];
+                    if (cleanup_ctx->socket_fd >= 0) {
+                        close(cleanup_ctx->socket_fd);
+                    }
+                    free(cleanup_ctx);
+                }
+            }
             return HAL_STATUS_ERROR;
         }
-    }
 
-    /* Set non-blocking mode if requested */
-    if (!ctx->config.blocking_mode) {
-        int flags = fcntl(linux_ctx->socket_fd, F_GETFL, 0);
-        if (flags < 0 || fcntl(linux_ctx->socket_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-            close(linux_ctx->socket_fd);
+        /* Create raw socket */
+        linux_ctx->socket_fd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+        if (linux_ctx->socket_fd < 0) {
             free(linux_ctx);
+            /* Cleanup previously allocated ports */
+            for (uint8_t i = 0; i < port; i++) {
+                if (ctx->platform_context[i] != NULL) {
+                    hal_linux_context_t* cleanup_ctx = (hal_linux_context_t*)ctx->platform_context[i];
+                    if (cleanup_ctx->socket_fd >= 0) {
+                        close(cleanup_ctx->socket_fd);
+                    }
+                    free(cleanup_ctx);
+                }
+            }
             return HAL_STATUS_ERROR;
         }
+
+        /* Get interface index */
+        struct ifreq ifr;
+        memset(&ifr, 0, sizeof(ifr));
+        strncpy(ifr.ifr_name, ctx->config[port].interface_name, IF_NAMESIZE - 1);
+
+        if (ioctl(linux_ctx->socket_fd, SIOCGIFINDEX, &ifr) < 0) {
+            close(linux_ctx->socket_fd);
+            free(linux_ctx);
+            /* Cleanup previously allocated ports */
+            for (uint8_t i = 0; i < port; i++) {
+                if (ctx->platform_context[i] != NULL) {
+                    hal_linux_context_t* cleanup_ctx = (hal_linux_context_t*)ctx->platform_context[i];
+                    if (cleanup_ctx->socket_fd >= 0) {
+                        close(cleanup_ctx->socket_fd);
+                    }
+                    free(cleanup_ctx);
+                }
+            }
+            return HAL_STATUS_NO_DEVICE;
+        }
+        linux_ctx->ifindex = ifr.ifr_ifindex;
+
+        /* Get MAC address */
+        if (ioctl(linux_ctx->socket_fd, SIOCGIFHWADDR, &ifr) < 0) {
+            close(linux_ctx->socket_fd);
+            free(linux_ctx);
+            /* Cleanup previously allocated ports */
+            for (uint8_t i = 0; i < port; i++) {
+                if (ctx->platform_context[i] != NULL) {
+                    hal_linux_context_t* cleanup_ctx = (hal_linux_context_t*)ctx->platform_context[i];
+                    if (cleanup_ctx->socket_fd >= 0) {
+                        close(cleanup_ctx->socket_fd);
+                    }
+                    free(cleanup_ctx);
+                }
+            }
+            return HAL_STATUS_ERROR;
+        }
+        memcpy(ctx->config[port].mac_address, ifr.ifr_hwaddr.sa_data, 6);
+
+        /* Set promiscuous mode if requested */
+        if (ctx->config[port].promiscuous_mode) {
+            struct packet_mreq mreq;
+            memset(&mreq, 0, sizeof(mreq));
+            mreq.mr_ifindex = linux_ctx->ifindex;
+            mreq.mr_type = PACKET_MR_PROMISC;
+
+            if (setsockopt(linux_ctx->socket_fd, SOL_PACKET, PACKET_ADD_MEMBERSHIP,
+                           &mreq, sizeof(mreq)) < 0) {
+                close(linux_ctx->socket_fd);
+                free(linux_ctx);
+                /* Cleanup previously allocated ports */
+                for (uint8_t i = 0; i < port; i++) {
+                    if (ctx->platform_context[i] != NULL) {
+                        hal_linux_context_t* cleanup_ctx = (hal_linux_context_t*)ctx->platform_context[i];
+                        if (cleanup_ctx->socket_fd >= 0) {
+                            close(cleanup_ctx->socket_fd);
+                        }
+                        free(cleanup_ctx);
+                    }
+                }
+                return HAL_STATUS_ERROR;
+            }
+        }
+
+        /* Set non-blocking mode if requested */
+        if (!ctx->config[port].blocking_mode) {
+            int flags = fcntl(linux_ctx->socket_fd, F_GETFL, 0);
+            if (flags < 0 || fcntl(linux_ctx->socket_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+                close(linux_ctx->socket_fd);
+                free(linux_ctx);
+                /* Cleanup previously allocated ports */
+                for (uint8_t i = 0; i < port; i++) {
+                    if (ctx->platform_context[i] != NULL) {
+                        hal_linux_context_t* cleanup_ctx = (hal_linux_context_t*)ctx->platform_context[i];
+                        if (cleanup_ctx->socket_fd >= 0) {
+                            close(cleanup_ctx->socket_fd);
+                        }
+                        free(cleanup_ctx);
+                    }
+                }
+                return HAL_STATUS_ERROR;
+            }
+        }
+
+        /* Bind socket to interface */
+        memset(&linux_ctx->socket_address, 0, sizeof(linux_ctx->socket_address));
+        linux_ctx->socket_address.sll_family = AF_PACKET;
+        linux_ctx->socket_address.sll_protocol = htons(ETH_P_ALL);
+        linux_ctx->socket_address.sll_ifindex = linux_ctx->ifindex;
+
+        if (bind(linux_ctx->socket_fd, (struct sockaddr*)&linux_ctx->socket_address,
+                 sizeof(linux_ctx->socket_address)) < 0) {
+            close(linux_ctx->socket_fd);
+            free(linux_ctx);
+            /* Cleanup previously allocated ports */
+            for (uint8_t i = 0; i < port; i++) {
+                if (ctx->platform_context[i] != NULL) {
+                    hal_linux_context_t* cleanup_ctx = (hal_linux_context_t*)ctx->platform_context[i];
+                    if (cleanup_ctx->socket_fd >= 0) {
+                        close(cleanup_ctx->socket_fd);
+                    }
+                    free(cleanup_ctx);
+                }
+            }
+            return HAL_STATUS_ERROR;
+        }
+
+        ctx->platform_context[port] = linux_ctx;
+
+        /* Initialize device info for this port */
+        strncpy(ctx->device_info[port].interface_name, ctx->config[port].interface_name,
+                sizeof(ctx->device_info[port].interface_name) - 1);
+        memcpy(ctx->device_info[port].mac_address, ctx->config[port].mac_address, 6);
+        ctx->device_info[port].mtu = 1500;
+        ctx->device_info[port].speed_mbps = 1000;
+        ctx->device_info[port].link_up = true;
+        ctx->device_info[port].full_duplex = true;
+        ctx->device_info[port].platform = HAL_PLATFORM_LINUX_RAW_SOCKET;
     }
-
-    /* Bind socket to interface */
-    memset(&linux_ctx->socket_address, 0, sizeof(linux_ctx->socket_address));
-    linux_ctx->socket_address.sll_family = AF_PACKET;
-    linux_ctx->socket_address.sll_protocol = htons(ETH_P_ALL);
-    linux_ctx->socket_address.sll_ifindex = linux_ctx->ifindex;
-
-    if (bind(linux_ctx->socket_fd, (struct sockaddr*)&linux_ctx->socket_address,
-             sizeof(linux_ctx->socket_address)) < 0) {
-        close(linux_ctx->socket_fd);
-        free(linux_ctx);
-        return HAL_STATUS_ERROR;
-    }
-
-    ctx->platform_context = linux_ctx;
-
-    /* Initialize device info */
-    strncpy(ctx->device_info.interface_name, ctx->config.interface_name,
-            sizeof(ctx->device_info.interface_name) - 1);
-    memcpy(ctx->device_info.mac_address, ctx->config.mac_address, 6);
-    ctx->device_info.mtu = 1500;
-    ctx->device_info.speed_mbps = 1000;
-    ctx->device_info.link_up = true;
-    ctx->device_info.full_duplex = true;
-    ctx->device_info.platform = HAL_PLATFORM_LINUX_RAW_SOCKET;
 
     return HAL_STATUS_SUCCESS;
 }
 
 static hal_status_t hal_linux_shutdown(hal_context_t* ctx)
 {
-    if (ctx == NULL || ctx->platform_context == NULL) {
+    if (ctx == NULL) {
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context;
-
-    /* Free all allocated buffers */
-    for (uint32_t i = 0; i < linux_ctx->tx_buffer_count; i++) {
-        if (linux_ctx->tx_buffers[i] != NULL) {
-            free(linux_ctx->tx_buffers[i]->data);
-            free(linux_ctx->tx_buffers[i]);
+    /* Shutdown all ports */
+    for (uint8_t port = 0; port < ctx->port_count; port++) {
+        if (ctx->platform_context[port] == NULL) {
+            continue;
         }
-    }
 
-    for (uint32_t i = 0; i < linux_ctx->rx_buffer_count; i++) {
-        if (linux_ctx->rx_buffers[i] != NULL) {
-            free(linux_ctx->rx_buffers[i]->data);
-            free(linux_ctx->rx_buffers[i]);
+        hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context[port];
+
+        /* Free all allocated buffers */
+        for (uint32_t i = 0; i < linux_ctx->tx_buffer_count; i++) {
+            if (linux_ctx->tx_buffers[i] != NULL) {
+                free(linux_ctx->tx_buffers[i]->data);
+                free(linux_ctx->tx_buffers[i]);
+            }
         }
-    }
 
-    /* Close socket */
-    if (linux_ctx->socket_fd >= 0) {
-        close(linux_ctx->socket_fd);
-    }
+        for (uint32_t i = 0; i < linux_ctx->rx_buffer_count; i++) {
+            if (linux_ctx->rx_buffers[i] != NULL) {
+                free(linux_ctx->rx_buffers[i]->data);
+                free(linux_ctx->rx_buffers[i]);
+            }
+        }
 
-    free(linux_ctx);
-    ctx->platform_context = NULL;
+        /* Close socket */
+        if (linux_ctx->socket_fd >= 0) {
+            close(linux_ctx->socket_fd);
+        }
+
+        free(linux_ctx);
+        ctx->platform_context[port] = NULL;
+    }
 
     return HAL_STATUS_SUCCESS;
 }
 
 static hal_status_t hal_linux_send_frame(hal_context_t* ctx, hal_frame_buffer_t* buffer)
 {
-    if (ctx == NULL || buffer == NULL || ctx->platform_context == NULL) {
+    if (ctx == NULL || buffer == NULL) {
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context;
+    /* Get port from buffer, default to 0 if not set */
+    uint8_t port = buffer->port;
+    if (port >= ctx->port_count) {
+        port = 0;
+    }
+
+    if (ctx->platform_context[port] == NULL) {
+        return HAL_STATUS_ERROR;
+    }
+
+    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context[port];
 
     ssize_t sent = sendto(linux_ctx->socket_fd, buffer->data, buffer->length, 0,
                           (struct sockaddr*)&linux_ctx->socket_address,
@@ -208,11 +298,19 @@ static hal_status_t hal_linux_send_frame(hal_context_t* ctx, hal_frame_buffer_t*
 
 static hal_status_t hal_linux_receive_frame(hal_context_t* ctx, hal_frame_buffer_t** buffer)
 {
-    if (ctx == NULL || buffer == NULL || ctx->platform_context == NULL) {
+    if (ctx == NULL || buffer == NULL) {
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context;
+    /* Try to receive from primary port (port 0) by default */
+    /* In multi-port mode, caller should use hal_receive_frame_port() */
+    uint8_t port = 0;
+
+    if (ctx->platform_context[port] == NULL) {
+        return HAL_STATUS_ERROR;
+    }
+
+    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context[port];
 
     /* Allocate RX buffer if needed */
     hal_frame_buffer_t* rx_buf = (hal_frame_buffer_t*)calloc(1, sizeof(hal_frame_buffer_t));
@@ -220,13 +318,13 @@ static hal_status_t hal_linux_receive_frame(hal_context_t* ctx, hal_frame_buffer
         return HAL_STATUS_NO_BUFFER;
     }
 
-    rx_buf->data = (uint8_t*)malloc(ctx->config.rx_buffer_size);
+    rx_buf->data = (uint8_t*)malloc(ctx->config[port].rx_buffer_size);
     if (rx_buf->data == NULL) {
         free(rx_buf);
         return HAL_STATUS_NO_BUFFER;
     }
 
-    rx_buf->capacity = ctx->config.rx_buffer_size;
+    rx_buf->capacity = ctx->config[port].rx_buffer_size;
 
     /* Receive frame */
     ssize_t received = recvfrom(linux_ctx->socket_fd, rx_buf->data, rx_buf->capacity,
@@ -244,7 +342,7 @@ static hal_status_t hal_linux_receive_frame(hal_context_t* ctx, hal_frame_buffer
 
     rx_buf->length = (uint16_t)received;
     rx_buf->timestamp = 0;  /* TODO: Get timestamp */
-    rx_buf->port = 0;
+    rx_buf->port = port;
 
     /* Store in RX buffer list */
     if (linux_ctx->rx_buffer_count < 32) {
@@ -258,11 +356,18 @@ static hal_status_t hal_linux_receive_frame(hal_context_t* ctx, hal_frame_buffer
 static hal_status_t hal_linux_alloc_tx_buffer(hal_context_t* ctx, uint16_t size,
                                                 hal_frame_buffer_t** buffer)
 {
-    if (ctx == NULL || buffer == NULL || size == 0 || ctx->platform_context == NULL) {
+    if (ctx == NULL || buffer == NULL || size == 0) {
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context;
+    /* Use primary port for buffer allocation */
+    uint8_t port = 0;
+
+    if (ctx->platform_context[port] == NULL) {
+        return HAL_STATUS_ERROR;
+    }
+
+    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context[port];
 
     if (linux_ctx->tx_buffer_count >= 32) {
         return HAL_STATUS_NO_BUFFER;
@@ -284,7 +389,7 @@ static hal_status_t hal_linux_alloc_tx_buffer(hal_context_t* ctx, uint16_t size,
     buf->length = 0;
     buf->capacity = size;
     buf->timestamp = 0;
-    buf->port = 0;
+    buf->port = port;
     buf->user_data = NULL;
     buf->hal_private = NULL;
 
@@ -296,24 +401,31 @@ static hal_status_t hal_linux_alloc_tx_buffer(hal_context_t* ctx, uint16_t size,
 
 static hal_status_t hal_linux_free_tx_buffer(hal_context_t* ctx, hal_frame_buffer_t* buffer)
 {
-    if (ctx == NULL || buffer == NULL || ctx->platform_context == NULL) {
+    if (ctx == NULL || buffer == NULL) {
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context;
+    /* Search all ports for the buffer */
+    for (uint8_t port = 0; port < ctx->port_count; port++) {
+        if (ctx->platform_context[port] == NULL) {
+            continue;
+        }
 
-    /* Find and remove buffer from list */
-    for (uint32_t i = 0; i < linux_ctx->tx_buffer_count; i++) {
-        if (linux_ctx->tx_buffers[i] == buffer) {
-            free(buffer->data);
-            free(buffer);
+        hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context[port];
 
-            /* Shift remaining buffers */
-            for (uint32_t j = i; j < linux_ctx->tx_buffer_count - 1; j++) {
-                linux_ctx->tx_buffers[j] = linux_ctx->tx_buffers[j + 1];
+        /* Find and remove buffer from list */
+        for (uint32_t i = 0; i < linux_ctx->tx_buffer_count; i++) {
+            if (linux_ctx->tx_buffers[i] == buffer) {
+                free(buffer->data);
+                free(buffer);
+
+                /* Shift remaining buffers */
+                for (uint32_t j = i; j < linux_ctx->tx_buffer_count - 1; j++) {
+                    linux_ctx->tx_buffers[j] = linux_ctx->tx_buffers[j + 1];
+                }
+                linux_ctx->tx_buffer_count--;
+                return HAL_STATUS_SUCCESS;
             }
-            linux_ctx->tx_buffer_count--;
-            return HAL_STATUS_SUCCESS;
         }
     }
 
@@ -322,24 +434,31 @@ static hal_status_t hal_linux_free_tx_buffer(hal_context_t* ctx, hal_frame_buffe
 
 static hal_status_t hal_linux_free_rx_buffer(hal_context_t* ctx, hal_frame_buffer_t* buffer)
 {
-    if (ctx == NULL || buffer == NULL || ctx->platform_context == NULL) {
+    if (ctx == NULL || buffer == NULL) {
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context;
+    /* Search all ports for the buffer */
+    for (uint8_t port = 0; port < ctx->port_count; port++) {
+        if (ctx->platform_context[port] == NULL) {
+            continue;
+        }
 
-    /* Find and remove buffer from list */
-    for (uint32_t i = 0; i < linux_ctx->rx_buffer_count; i++) {
-        if (linux_ctx->rx_buffers[i] == buffer) {
-            free(buffer->data);
-            free(buffer);
+        hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context[port];
 
-            /* Shift remaining buffers */
-            for (uint32_t j = i; j < linux_ctx->rx_buffer_count - 1; j++) {
-                linux_ctx->rx_buffers[j] = linux_ctx->rx_buffers[j + 1];
+        /* Find and remove buffer from list */
+        for (uint32_t i = 0; i < linux_ctx->rx_buffer_count; i++) {
+            if (linux_ctx->rx_buffers[i] == buffer) {
+                free(buffer->data);
+                free(buffer);
+
+                /* Shift remaining buffers */
+                for (uint32_t j = i; j < linux_ctx->rx_buffer_count - 1; j++) {
+                    linux_ctx->rx_buffers[j] = linux_ctx->rx_buffers[j + 1];
+                }
+                linux_ctx->rx_buffer_count--;
+                return HAL_STATUS_SUCCESS;
             }
-            linux_ctx->rx_buffer_count--;
-            return HAL_STATUS_SUCCESS;
         }
     }
 
@@ -352,17 +471,25 @@ static hal_status_t hal_linux_get_device_info(hal_context_t* ctx, hal_device_inf
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    memcpy(info, &ctx->device_info, sizeof(hal_device_info_t));
+    /* Return info for primary port */
+    memcpy(info, &ctx->device_info[0], sizeof(hal_device_info_t));
     return HAL_STATUS_SUCCESS;
 }
 
 static hal_status_t hal_linux_set_promiscuous_mode(hal_context_t* ctx, bool enable)
 {
-    if (ctx == NULL || ctx->platform_context == NULL) {
+    if (ctx == NULL) {
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context;
+    /* Apply to primary port */
+    uint8_t port = 0;
+
+    if (ctx->platform_context[port] == NULL) {
+        return HAL_STATUS_ERROR;
+    }
+
+    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context[port];
 
     struct packet_mreq mreq;
     memset(&mreq, 0, sizeof(mreq));
@@ -390,17 +517,24 @@ static hal_status_t hal_linux_flush_tx_buffers(hal_context_t* ctx)
 
 static hal_status_t hal_linux_flush_rx_buffers(hal_context_t* ctx)
 {
-    if (ctx == NULL || ctx->platform_context == NULL) {
+    if (ctx == NULL) {
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context;
+    /* Flush all ports */
+    for (uint8_t port = 0; port < ctx->port_count; port++) {
+        if (ctx->platform_context[port] == NULL) {
+            continue;
+        }
 
-    /* Drain socket receive buffer */
-    uint8_t drain_buffer[2048];
-    while (recv(linux_ctx->socket_fd, drain_buffer, sizeof(drain_buffer),
-                MSG_DONTWAIT) > 0) {
-        /* Discard received data */
+        hal_linux_context_t* linux_ctx = (hal_linux_context_t*)ctx->platform_context[port];
+
+        /* Drain socket receive buffer */
+        uint8_t drain_buffer[2048];
+        while (recv(linux_ctx->socket_fd, drain_buffer, sizeof(drain_buffer),
+                    MSG_DONTWAIT) > 0) {
+            /* Discard received data */
+        }
     }
 
     return HAL_STATUS_SUCCESS;

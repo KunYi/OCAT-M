@@ -12,6 +12,7 @@
 #include "hal_internal.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <time.h>
 
 /* ========================================================================== */
@@ -36,52 +37,70 @@ static hal_status_t hal_stub_init(hal_context_t* ctx)
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    /* Allocate stub context */
-    hal_stub_context_t* stub_ctx = (hal_stub_context_t*)calloc(1, sizeof(hal_stub_context_t));
-    if (stub_ctx == NULL) {
-        return HAL_STATUS_ERROR;
+    /* Initialize each configured port */
+    for (uint8_t port = 0; port < ctx->port_count; port++) {
+        /* Allocate stub context for this port */
+        hal_stub_context_t* stub_ctx = (hal_stub_context_t*)calloc(1, sizeof(hal_stub_context_t));
+        if (stub_ctx == NULL) {
+            /* Cleanup previously allocated ports */
+            for (uint8_t i = 0; i < port; i++) {
+                if (ctx->platform_context[i] != NULL) {
+                    free(ctx->platform_context[i]);
+                }
+            }
+            return HAL_STATUS_ERROR;
+        }
+
+        stub_ctx->link_up = true;
+        ctx->platform_context[port] = stub_ctx;
+
+        /* Initialize device info for this port */
+        snprintf(ctx->device_info[port].interface_name,
+                 sizeof(ctx->device_info[port].interface_name),
+                 "stub%d", port);
+        memcpy(ctx->device_info[port].mac_address, ctx->config[port].mac_address, 6);
+        ctx->device_info[port].mtu = 1500;
+        ctx->device_info[port].speed_mbps = 100;
+        ctx->device_info[port].link_up = true;
+        ctx->device_info[port].full_duplex = true;
+        ctx->device_info[port].platform = HAL_PLATFORM_STUB;
     }
-
-    stub_ctx->link_up = true;
-    ctx->platform_context = stub_ctx;
-
-    /* Initialize device info */
-    strncpy(ctx->device_info.interface_name, "stub0", sizeof(ctx->device_info.interface_name) - 1);
-    memcpy(ctx->device_info.mac_address, ctx->config.mac_address, 6);
-    ctx->device_info.mtu = 1500;
-    ctx->device_info.speed_mbps = 100;
-    ctx->device_info.link_up = true;
-    ctx->device_info.full_duplex = true;
-    ctx->device_info.platform = HAL_PLATFORM_STUB;
 
     return HAL_STATUS_SUCCESS;
 }
 
 static hal_status_t hal_stub_shutdown(hal_context_t* ctx)
 {
-    if (ctx == NULL || ctx->platform_context == NULL) {
+    if (ctx == NULL) {
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_stub_context_t* stub_ctx = (hal_stub_context_t*)ctx->platform_context;
-
-    /* Free all allocated buffers */
-    for (uint32_t i = 0; i < stub_ctx->tx_buffer_count; i++) {
-        if (stub_ctx->tx_buffers[i] != NULL) {
-            free(stub_ctx->tx_buffers[i]->data);
-            free(stub_ctx->tx_buffers[i]);
+    /* Shutdown all ports */
+    for (uint8_t port = 0; port < ctx->port_count; port++) {
+        if (ctx->platform_context[port] == NULL) {
+            continue;
         }
-    }
 
-    for (uint32_t i = 0; i < stub_ctx->rx_buffer_count; i++) {
-        if (stub_ctx->rx_buffers[i] != NULL) {
-            free(stub_ctx->rx_buffers[i]->data);
-            free(stub_ctx->rx_buffers[i]);
+        hal_stub_context_t* stub_ctx = (hal_stub_context_t*)ctx->platform_context[port];
+
+        /* Free all allocated buffers */
+        for (uint32_t i = 0; i < stub_ctx->tx_buffer_count; i++) {
+            if (stub_ctx->tx_buffers[i] != NULL) {
+                free(stub_ctx->tx_buffers[i]->data);
+                free(stub_ctx->tx_buffers[i]);
+            }
         }
-    }
 
-    free(stub_ctx);
-    ctx->platform_context = NULL;
+        for (uint32_t i = 0; i < stub_ctx->rx_buffer_count; i++) {
+            if (stub_ctx->rx_buffers[i] != NULL) {
+                free(stub_ctx->rx_buffers[i]->data);
+                free(stub_ctx->rx_buffers[i]);
+            }
+        }
+
+        free(stub_ctx);
+        ctx->platform_context[port] = NULL;
+    }
 
     return HAL_STATUS_SUCCESS;
 }
@@ -118,10 +137,14 @@ static hal_status_t hal_stub_alloc_tx_buffer(hal_context_t* ctx, uint16_t size, 
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_stub_context_t* stub_ctx = (hal_stub_context_t*)ctx->platform_context;
-    if (stub_ctx == NULL) {
+    /* Use primary port for buffer allocation */
+    uint8_t port = 0;
+
+    if (ctx->platform_context[port] == NULL) {
         return HAL_STATUS_ERROR;
     }
+
+    hal_stub_context_t* stub_ctx = (hal_stub_context_t*)ctx->platform_context[port];
 
     if (stub_ctx->tx_buffer_count >= 32) {
         return HAL_STATUS_NO_BUFFER;
@@ -143,7 +166,7 @@ static hal_status_t hal_stub_alloc_tx_buffer(hal_context_t* ctx, uint16_t size, 
     buf->length = 0;
     buf->capacity = size;
     buf->timestamp = 0;
-    buf->port = 0;
+    buf->port = port;
     buf->user_data = NULL;
     buf->hal_private = NULL;
 
@@ -159,23 +182,27 @@ static hal_status_t hal_stub_free_tx_buffer(hal_context_t* ctx, hal_frame_buffer
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_stub_context_t* stub_ctx = (hal_stub_context_t*)ctx->platform_context;
-    if (stub_ctx == NULL) {
-        return HAL_STATUS_ERROR;
-    }
+    /* Search all ports for the buffer */
+    for (uint8_t port = 0; port < ctx->port_count; port++) {
+        if (ctx->platform_context[port] == NULL) {
+            continue;
+        }
 
-    /* Find and remove buffer from list */
-    for (uint32_t i = 0; i < stub_ctx->tx_buffer_count; i++) {
-        if (stub_ctx->tx_buffers[i] == buffer) {
-            free(buffer->data);
-            free(buffer);
+        hal_stub_context_t* stub_ctx = (hal_stub_context_t*)ctx->platform_context[port];
 
-            /* Shift remaining buffers */
-            for (uint32_t j = i; j < stub_ctx->tx_buffer_count - 1; j++) {
-                stub_ctx->tx_buffers[j] = stub_ctx->tx_buffers[j + 1];
+        /* Find and remove buffer from list */
+        for (uint32_t i = 0; i < stub_ctx->tx_buffer_count; i++) {
+            if (stub_ctx->tx_buffers[i] == buffer) {
+                free(buffer->data);
+                free(buffer);
+
+                /* Shift remaining buffers */
+                for (uint32_t j = i; j < stub_ctx->tx_buffer_count - 1; j++) {
+                    stub_ctx->tx_buffers[j] = stub_ctx->tx_buffers[j + 1];
+                }
+                stub_ctx->tx_buffer_count--;
+                return HAL_STATUS_SUCCESS;
             }
-            stub_ctx->tx_buffer_count--;
-            return HAL_STATUS_SUCCESS;
         }
     }
 
@@ -188,23 +215,27 @@ static hal_status_t hal_stub_free_rx_buffer(hal_context_t* ctx, hal_frame_buffer
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    hal_stub_context_t* stub_ctx = (hal_stub_context_t*)ctx->platform_context;
-    if (stub_ctx == NULL) {
-        return HAL_STATUS_ERROR;
-    }
+    /* Search all ports for the buffer */
+    for (uint8_t port = 0; port < ctx->port_count; port++) {
+        if (ctx->platform_context[port] == NULL) {
+            continue;
+        }
 
-    /* Find and remove buffer from list */
-    for (uint32_t i = 0; i < stub_ctx->rx_buffer_count; i++) {
-        if (stub_ctx->rx_buffers[i] == buffer) {
-            free(buffer->data);
-            free(buffer);
+        hal_stub_context_t* stub_ctx = (hal_stub_context_t*)ctx->platform_context[port];
 
-            /* Shift remaining buffers */
-            for (uint32_t j = i; j < stub_ctx->rx_buffer_count - 1; j++) {
-                stub_ctx->rx_buffers[j] = stub_ctx->rx_buffers[j + 1];
+        /* Find and remove buffer from list */
+        for (uint32_t i = 0; i < stub_ctx->rx_buffer_count; i++) {
+            if (stub_ctx->rx_buffers[i] == buffer) {
+                free(buffer->data);
+                free(buffer);
+
+                /* Shift remaining buffers */
+                for (uint32_t j = i; j < stub_ctx->rx_buffer_count - 1; j++) {
+                    stub_ctx->rx_buffers[j] = stub_ctx->rx_buffers[j + 1];
+                }
+                stub_ctx->rx_buffer_count--;
+                return HAL_STATUS_SUCCESS;
             }
-            stub_ctx->rx_buffer_count--;
-            return HAL_STATUS_SUCCESS;
         }
     }
 
@@ -217,7 +248,8 @@ static hal_status_t hal_stub_get_device_info(hal_context_t* ctx, hal_device_info
         return HAL_STATUS_INVALID_PARAM;
     }
 
-    memcpy(info, &ctx->device_info, sizeof(hal_device_info_t));
+    /* Return info for primary port */
+    memcpy(info, &ctx->device_info[0], sizeof(hal_device_info_t));
     return HAL_STATUS_SUCCESS;
 }
 
