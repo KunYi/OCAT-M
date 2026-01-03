@@ -719,27 +719,33 @@ ethercat-master/
 | Phase 3.4: EoE | Not Started | 0% |
 | Phase 3.5: AoE | Not Started | 0% |
 | Phase 3.6: VoE | Not Started | 0% |
-| Phase 4: Network Scanning | ✅ Complete | 100% |
+| Phase 4: Network Scanning & Configuration | ✅ Complete | 100% |
 | Phase 5: Integration | Not Started | 0% |
 
-**Overall Progress**: 60% (3.8 of 6.3 phases complete)
+**Overall Progress**: 65% (4.1 of 6.3 phases complete)
 
-**Current Status**: Phase 4 Complete - Network Scanning and Master Control (Full Implementation)
+**Current Status**: Phase 4 Complete - Network Scanning, Master Control, and Slave Configuration
 
 **Phase 4 Status**:
 - ✅ Master control API defined (master.h)
 - ✅ Network scanning API defined (scan.h)
+- ✅ Slave configuration API defined (config.h)
 - ✅ Master core implementation (master.c - 461 lines)
 - ✅ Full scan implementation (scan.c - 735 lines)
+- ✅ Full configuration implementation (config.c - 668 lines)
 - ✅ BRD (Broadcast Read) for slave discovery
 - ✅ APRD/APWR (Auto-increment Physical Read/Write)
 - ✅ FPRD/FPWR (Configured Physical Read/Write)
 - ✅ SII EEPROM reading with full state machine
 - ✅ Slave identification (Vendor ID, Product Code, Revision, Serial)
-- ✅ EEPROM category reading (GENERAL, STRINGS, etc.)
+- ✅ EEPROM category reading (GENERAL, STRINGS, FMMU, SYNC_MANAGER, TXPDO, RXPDO)
 - ✅ Slave name reading from EEPROM
 - ✅ Topology detection via port descriptors
-- ⏳ Slave configuration (TODO - next priority)
+- ✅ Sync Manager configuration (read from EEPROM and write to ESC)
+- ✅ FMMU configuration (read from EEPROM and write to ESC)
+- ✅ PDO mapping configuration (read TxPDO/RxPDO from EEPROM)
+- ✅ Mailbox configuration (setup mailbox Sync Managers)
+- ✅ Process data offset calculation
 - ⏳ Distributed Clocks (TODO - optional)
 
 **Application Layer Protocols** (ETG1000.6):
@@ -751,10 +757,9 @@ ethercat-master/
 6. ⏳ **VoE** (Vendor specific) - Optional
 
 **Next Steps**:
-1. **Phase 4 (Remaining)**: Implement slave configuration (Sync Managers, PDO mapping)
-2. Phase 4: Implement Distributed Clocks (optional)
-3. **Phase 5 (Recommended)**: Integration and cyclic operation
-4. Phase 3.2-3.6: Implement remaining protocols (FoE, SoE, EoE, AoE, VoE) - All optional
+1. **Phase 5 (Recommended)**: Integration and cyclic operation (LRW for process data)
+2. Phase 4.3: Implement Distributed Clocks (optional)
+3. Phase 3.2-3.6: Implement remaining protocols (FoE, SoE, EoE, AoE, VoE) - All optional
 
 ### Completed Milestones
 
@@ -826,29 +831,36 @@ ethercat-master/
 
 - [x] M4.1: Master control API defined (master.h)
 - [x] M4.2: Network scanning API defined (scan.h)
-- [x] M4.3: Master internal structures defined (master_internal.h)
-- [x] M4.4: Master core implementation (master.c - 461 lines)
-- [x] M4.5: Full scan implementation (scan.c - 735 lines)
-- [x] M4.6: BRD (Broadcast Read) for slave discovery implemented
-- [x] M4.7: APRD (Auto-increment Physical Read) implemented
-- [x] M4.8: APWR (Auto-increment Physical Write) for address assignment implemented
-- [x] M4.9: FPRD/FPWR (Configured Physical Read/Write) implemented
-- [x] M4.10: SII EEPROM read state machine implemented
-- [x] M4.11: Slave identification reading implemented
-- [x] M4.12: EEPROM category reading implemented
-- [x] M4.13: Slave name reading implemented
-- [x] M4.14: Topology detection implemented
-- [x] M4.15: Build integration successful (0 errors, 0 warnings)
-- [ ] M4.16: Slave configuration implementation (TODO - next priority)
-- [ ] M4.17: Distributed Clocks implementation (TODO - optional)
-- [ ] M4.18: Unit tests (TODO - optional)
+- [x] M4.3: Slave configuration API defined (config.h)
+- [x] M4.4: Master internal structures defined (master_internal.h)
+- [x] M4.5: Master core implementation (master.c - 461 lines)
+- [x] M4.6: Full scan implementation (scan.c - 735 lines)
+- [x] M4.7: Full configuration implementation (config.c - 668 lines)
+- [x] M4.8: BRD (Broadcast Read) for slave discovery implemented
+- [x] M4.9: APRD (Auto-increment Physical Read) implemented
+- [x] M4.10: APWR (Auto-increment Physical Write) for address assignment implemented
+- [x] M4.11: FPRD/FPWR (Configured Physical Read/Write) implemented
+- [x] M4.12: SII EEPROM read state machine implemented
+- [x] M4.13: Slave identification reading implemented
+- [x] M4.14: EEPROM category reading implemented
+- [x] M4.15: Slave name reading implemented
+- [x] M4.16: Topology detection implemented
+- [x] M4.17: Sync Manager configuration implemented
+- [x] M4.18: FMMU configuration implemented
+- [x] M4.19: PDO mapping configuration implemented
+- [x] M4.20: Mailbox configuration implemented
+- [x] M4.21: Process data offset calculation implemented
+- [x] M4.22: Build integration successful (0 errors, 0 warnings)
+- [ ] M4.23: Distributed Clocks implementation (TODO - optional)
+- [ ] M4.24: Unit tests (TODO - optional)
 
 **Phase 4 Implementation**:
-- 5 files (master.h, scan.h, master_internal.h, master.c, scan.c)
-- 1,196 lines of code (master.c 461 + scan.c 735)
+- 7 files (master.h, scan.h, config.h, master_internal.h, master.c, scan.c, config.c)
+- 1,864 lines of code (master.c 461 + scan.c 735 + config.c 668)
 - 0 compilation errors, 0 warnings
 - Full integration with DLL, HAL, AL, and CoE layers
 - Complete network scanning with EEPROM reading
+- Complete slave configuration with Sync Manager, FMMU, PDO, and Mailbox setup
 
 **Key Features**:
 - **Master Control**: Initialization, shutdown, state management
@@ -861,6 +873,11 @@ ethercat-master/
 - **Category Reading**: GENERAL, STRINGS, FMMU, SYNC_MANAGER, TXPDO, RXPDO, DC
 - **Slave Names**: String parsing from EEPROM STRINGS category
 - **Topology Detection**: Port descriptor analysis for network topology
+- **Sync Manager Configuration**: Read from EEPROM and write to ESC registers
+- **FMMU Configuration**: Read from EEPROM and write to ESC registers
+- **PDO Mapping**: Read TxPDO/RxPDO configuration from EEPROM
+- **Mailbox Setup**: Configure mailbox Sync Managers for CoE/FoE/SoE/EoE communication
+- **Process Data Layout**: Calculate logical memory offsets for all slaves
 - **Slave Management**: Information tracking, configuration orchestration
 - **Cyclic Operation**: Start/stop control, cycle processing framework
 - **Integration**: Seamless integration with all lower layers
@@ -872,11 +889,15 @@ ethercat-master/
 - ✅ SII EEPROM reading with full state machine
 - ✅ Topology detection via port descriptors
 - ✅ Slave identification (Vendor ID, Product Code, Revision, Serial)
-- ✅ EEPROM category reading (GENERAL, STRINGS, etc.)
+- ✅ EEPROM category reading (GENERAL, STRINGS, FMMU, SYNC_MANAGER, TXPDO, RXPDO)
 - ✅ Slave name reading from STRINGS category
+- ✅ Sync Manager configuration (read and write)
+- ✅ FMMU configuration (read and write)
+- ✅ PDO mapping configuration
+- ✅ Mailbox configuration
+- ✅ Process data offset calculation
 
 **Remaining Items**:
-- ⏳ Slave configuration (Sync Managers, PDO mapping)
 - ⏳ Distributed Clocks (optional)
 
 ### Build Statistics
@@ -886,16 +907,16 @@ Source Files:
   DLL:      11 files
   HAL:      3 files
   AL:       5 files
-  Master:   2 files
-  Total:    21 files
+  Master:   3 files
+  Total:    22 files
 
 Lines of Code:
   DLL:      ~3,500 lines
   HAL:      ~800 lines
   AL:       ~1,340 lines
   CoE:      ~753 lines
-  Master:   ~1,196 lines
-  Total:    ~7,589 lines
+  Master:   ~1,864 lines (master.c 461 + scan.c 735 + config.c 668)
+  Total:    ~8,257 lines
 
 Build Status: ✅ Success (0 errors, 0 warnings)
 Output:       build/lib/libethercat.a
@@ -913,5 +934,6 @@ Output:       build/lib/libethercat.a
 | 2.2.0 | 2026-01-03 | Claude Code | Updated after Phase 3.1 completion (CoE) |
 | 2.3.0 | 2026-01-03 | Claude Code | Updated after CoE segmented transfer + timeout implementation |
 | 3.0.0 | 2026-01-03 | Claude Code | Updated after Phase 4 start (Network Scanning - Stub Implementation) |
-| 3.1.0 | 2026-01-03 | Claude Code | Updated after Phase 4 completion (Network Scanning - Full Implementation) |
+| 3.1.0 | 2026-01-03 | Claude Code | Updated after Phase 4.1 completion (Network Scanning - Full Implementation) |
+| 4.0.0 | 2026-01-03 | Claude Code | Updated after Phase 4.2 completion (Slave Configuration - Full Implementation) |
 

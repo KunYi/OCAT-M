@@ -7,6 +7,7 @@
 
 #include "ethercat/master.h"
 #include "ethercat/scan.h"
+#include "ethercat/config.h"
 #include "ethercat/al.h"
 #include "ethercat/coe.h"
 #include "ethercat/dll.h"
@@ -113,6 +114,17 @@ master_status_t master_init(const master_config_t* config)
         return MASTER_STATUS_ERROR;
     }
 
+    /* Initialize config module */
+    config_status_t config_status = config_init();
+    if (config_status != CONFIG_STATUS_SUCCESS) {
+        scan_shutdown();
+        coe_shutdown();
+        al_shutdown();
+        dl_shutdown();
+        hal_shutdown();
+        return MASTER_STATUS_ERROR;
+    }
+
     g_master_context.state = MASTER_STATE_IDLE;
     g_master_context.initialized = true;
 
@@ -131,6 +143,7 @@ master_status_t master_shutdown(void)
     }
 
     /* Shutdown all modules */
+    config_shutdown();
     scan_shutdown();
     coe_shutdown();
     al_shutdown();
@@ -327,15 +340,46 @@ master_status_t master_configure_slaves(void)
 
     g_master_context.state = MASTER_STATE_CONFIGURING;
 
+    uint32_t timeout_ms = g_master_context.config.scan_timeout_ms;
+    if (timeout_ms == 0) {
+        timeout_ms = MASTER_DEFAULT_TIMEOUT_MS;
+    }
+
     /* Configure each slave */
     for (uint16_t i = 0; i < g_master_context.slave_count; i++) {
         master_slave_t* slave = &g_master_context.slaves[i];
 
-        /* TODO: Configure sync managers */
-        /* TODO: Configure mailbox */
-        /* TODO: Configure PDO mappings */
+        /* Read and apply slave configuration from EEPROM */
+        slave_config_t slave_config;
+        config_status_t status = config_configure_slave(slave->station_address,
+                                                         &slave_config,
+                                                         timeout_ms);
 
+        if (status != CONFIG_STATUS_SUCCESS) {
+            /* Configuration failed, but continue with other slaves */
+            slave->configured = false;
+            continue;
+        }
+
+        /* Store configuration information */
         slave->configured = true;
+    }
+
+    /* Calculate process data offsets */
+    slave_config_t* slave_configs = (slave_config_t*)malloc(g_master_context.slave_count * sizeof(slave_config_t));
+    if (slave_configs != NULL) {
+        for (uint16_t i = 0; i < g_master_context.slave_count; i++) {
+            config_configure_slave(g_master_context.slaves[i].station_address,
+                                   &slave_configs[i],
+                                   timeout_ms);
+        }
+
+        uint32_t total_input_size = 0;
+        uint32_t total_output_size = 0;
+        config_calculate_process_data(slave_configs, g_master_context.slave_count,
+                                       &total_input_size, &total_output_size);
+
+        free(slave_configs);
     }
 
     g_master_context.state = MASTER_STATE_PREOP;

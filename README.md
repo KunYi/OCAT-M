@@ -242,16 +242,16 @@ Source Files:
   DLL:      11 files
   HAL:      3 files
   AL:       5 files
-  Master:   2 files
-  Total:    21 files
+  Master:   3 files
+  Total:    22 files
 
 Lines of Code:
   DLL:      ~3,500 lines
   HAL:      ~800 lines
   AL:       ~1,340 lines
   CoE:      ~753 lines
-  Master:   ~1,196 lines
-  Total:    ~7,589 lines
+  Master:   ~1,864 lines (master.c 461 + scan.c 735 + config.c 668)
+  Total:    ~8,257 lines
 
 Build Status: ✅ Success (0 errors, 0 warnings)
 Output:       build/lib/libethercat.a
@@ -286,7 +286,10 @@ ethercat-master/
 │   ├── hal.h                    # HAL interface
 │   ├── al_types.h               # AL type definitions
 │   ├── al.h                     # AL interface
-│   └── coe.h                    # CoE interface
+│   ├── coe.h                    # CoE interface
+│   ├── master.h                 # Master control interface
+│   ├── scan.h                   # Network scanning interface
+│   └── config.h                 # Slave configuration interface
 ├── src/dll/                     # DLL implementation
 │   ├── dll_init.c               # Initialization
 │   ├── dll_tx.c                 # Transmission
@@ -312,6 +315,11 @@ ethercat-master/
 │   ├── al_reg.c                 # Register access
 │   ├── al_internal.h            # Internal definitions
 │   └── coe.c                    # CoE implementation
+├── src/master/                  # Master implementation
+│   ├── master.c                 # Master control core
+│   ├── master_internal.h        # Master internal definitions
+│   ├── scan.c                   # Network scanning
+│   └── config.c                 # Slave configuration
 ├── tests/dll/                   # Unit tests
 │   ├── test_dll_state.c         # State machine tests
 │   ├── test_dll_queue.c         # Queue tests
@@ -359,7 +367,7 @@ make info
 
 ## Next Steps
 
-### Phase 4 - Network Scanning and Master Control (Mostly Complete ✅)
+### Phase 4 - Network Scanning and Master Control ✅ Complete
 
 **Phase 4.1 - Network Scanning** ✅ Complete:
 - ✅ Slave discovery using BRD (Broadcast Read)
@@ -370,11 +378,13 @@ make info
 - ✅ Topology detection via port descriptors
 - ✅ Category-based EEPROM reading
 
-**Phase 4.2 - Slave Configuration** (Next Priority - Recommended):
-- Sync Manager configuration
-- PDO mapping configuration
-- Mailbox configuration
-- FMMU configuration
+**Phase 4.2 - Slave Configuration** ✅ Complete:
+- ✅ Sync Manager configuration (read from EEPROM and write to ESC)
+- ✅ PDO mapping configuration (read TxPDO/RxPDO from EEPROM)
+- ✅ Mailbox configuration (setup mailbox Sync Managers)
+- ✅ FMMU configuration (read from EEPROM and write to ESC)
+- ✅ Process data offset calculation
+- ✅ Complete slave configuration orchestration
 
 **Phase 4.3 - Distributed Clocks** (Optional):
 - DC synchronization
@@ -446,4 +456,4 @@ This is a clean-room implementation based on publicly available ETG specificatio
 ---
 
 **Last Updated**: 2026-01-03
-**Version**: 3.1.0 (Phase 1-2 Complete, Phase 3.1 CoE Complete, Phase 4 Network Scanning Complete)
+**Version**: 4.0.0 (Phase 1-2 Complete, Phase 3.1 CoE Complete, Phase 4 Network Scanning and Slave Configuration Complete)
