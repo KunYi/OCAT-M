@@ -112,6 +112,110 @@ sudo ./build/bin/benchmark eth1
 sudo chrt -f 80 ./build/bin/benchmark
 ```
 
+### 4. redundancy_demo.c
+
+**Purpose**: Demonstrates EtherCAT redundancy features with dual network interfaces.
+
+**Features**:
+- Dual-port HAL initialization
+- Port health monitoring (link status, error rate, idle time)
+- Automatic failover between ports
+- Manual port switching
+- Redundant process data exchange
+- Per-port statistics tracking
+- Cable redundancy mode (ring topology)
+- Failover threshold configuration
+
+**Usage**:
+```bash
+# Run with two network interfaces
+sudo ./build/bin/redundancy_demo eth0 eth1
+
+# Run with default interfaces (eth0, eth1)
+sudo ./build/bin/redundancy_demo
+```
+
+**Output**:
+- Dual-port initialization status
+- Link status for both ports
+- Port health checks (every 100 cycles)
+- Per-port statistics (frames sent/received, errors, WKC)
+- Automatic failover events
+- Final redundancy statistics (total failovers, success counts)
+
+**Duration**: Runs indefinitely until Ctrl+C
+
+**Requirements**:
+- Two EtherCAT-capable network interfaces
+- Both interfaces connected to EtherCAT network (ring topology for cable redundancy)
+- Root privileges
+
+**Redundancy Modes**:
+- **Cable Redundancy**: Ring topology with automatic failover on cable break
+- **Port Health Monitoring**: Continuous monitoring of link status and error rates
+- **Automatic Failover**: Switches to backup port after 3 consecutive errors
+- **Manual Switching**: Can be extended to support manual port selection
+
+**Example Output**:
+```
+=============================================================
+EtherCAT Redundancy Demonstration
+=============================================================
+
+[CONFIG] Primary interface: eth0
+[CONFIG] Secondary interface: eth1
+[CONFIG] Cycle time: 1000 us (1000 Hz)
+[CONFIG] Auto-failover: ENABLED
+[CONFIG] Failover threshold: 3 errors
+
+[STEP 1] Initializing HAL with dual ports...
+[OK] HAL initialized with 2 ports
+[INFO] Primary port link: UP
+[INFO] Secondary port link: UP
+
+[STEP 2] Initializing Process Data...
+[OK] Process data image allocated (input: 8 bytes, output: 8 bytes)
+[OK] Redundancy mode: CABLE, Active port: PRIMARY
+
+[STEP 4] Starting cyclic operation with redundancy...
+
+[CYCLE 100] Port Health Check:
+[HEALTH] Primary: HEALTHY, Secondary: HEALTHY
+[STATS] Primary - Sent: 100, Recv: 100, Errors: 0, WKC: 4
+[STATS] Secondary - Sent: 0, Recv: 0, Errors: 0, WKC: 0
+
+[CYCLE 1000] Active port: PRIMARY, Failovers: 0, Primary success: 1000, Secondary success: 0
+
+[FAILOVER] Switching from PRIMARY to SECONDARY port (errors: 3)
+[FAILOVER] Successfully switched to SECONDARY port (total failovers: 1)
+
+[CYCLE 2000] Active port: SECONDARY, Failovers: 1, Primary success: 1000, Secondary success: 1000
+
+=============================================================
+Final Statistics:
+=============================================================
+Total cycles:           5000
+WKC errors:             3
+Timeouts:               0
+Min cycle time:         42 us
+Max cycle time:         58 us
+Avg cycle time:         46 us
+
+Redundancy Statistics:
+Total failovers:        1
+Primary successes:      2500
+Secondary successes:    2500
+Final active port:      SECONDARY
+=============================================================
+```
+
+**Testing Redundancy**:
+1. Start the demo with both interfaces connected
+2. Disconnect primary interface cable during operation
+3. Observe automatic failover to secondary port
+4. Reconnect primary interface
+5. System continues on secondary port (manual switch back if needed)
+
 ## Requirements
 
 ### Hardware
@@ -340,5 +444,5 @@ This is a clean-room implementation based on publicly available ETG specificatio
 
 ---
 
-**Last Updated**: 2026-01-03
-**Version**: 1.0.0
+**Last Updated**: 2026-01-04
+**Version**: 1.1.0 (Added redundancy_demo.c)
