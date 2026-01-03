@@ -1,0 +1,731 @@
+# EtherCAT Master Stack - Implementation Plan
+
+## Document Information
+- **Version**: 1.0.0
+- **Target**: Embedded Systems (C11)
+- **Based on**: ETG1000 Series Version 1.0.4
+
+---
+
+## Table of Contents
+1. [Overview](#overview)
+2. [Phase 1: Data Link Layer Services](#phase-1-data-link-layer-services)
+3. [Phase 2: Data Link Layer Protocol](#phase-2-data-link-layer-protocol)
+4. [Phase 3: Application Layer Services](#phase-3-application-layer-services)
+5. [Phase 4: Application Layer Protocol](#phase-4-application-layer-protocol)
+6. [Phase 5: Integration and Testing](#phase-5-integration-and-testing)
+
+---
+
+## Overview
+
+This implementation plan follows a bottom-up approach, starting with the Data Link Layer and progressing to the Application Layer. Each phase includes implementation, unit testing, and validation against the ETG specifications.
+
+### Development Principles
+- **Modular Design**: Each layer is independent with well-defined interfaces
+- **Embedded-Friendly**: Minimal memory footprint, no dynamic allocation where possible
+- **Real-Time Capable**: Deterministic execution, bounded latency
+- **Testable**: Each module has comprehensive unit tests
+- **Specification-Driven**: All code follows Spec.md definitions
+
+---
+
+## Phase 1: Data Link Layer Services
+
+**Status**: In Progress
+**Based on**: ETG1000_3 - Data Link Layer Services
+**Dependencies**: None (foundation layer)
+
+### 1.1 Core Data Structures
+
+**Files to Create**:
+- `include/ethercat/dll_types.h` - DLL type definitions
+- `include/ethercat/dll_config.h` - DLL configuration structures
+- `include/ethercat/dll_errors.h` - DLL error codes and handling
+
+**Implementation Steps**:
+1. Define all enums (dl_status_t, dl_state_t, dl_error_t, dl_param_id_t)
+2. Define all structures (dl_config_t, dl_send_req_t, dl_send_con_t, dl_receive_ind_t)
+3. Define callback function types
+4. Add documentation comments for all types
+
+**Testing Strategy**:
+- Verify structure sizes and alignment
+- Test enum value ranges
+- Validate structure packing
+
+### 1.2 DLL State Machine
+
+**Files to Create**:
+- `src/dll/dll_state.c` - State machine implementation
+- `include/ethercat/dll_state.h` - State machine interface
+
+**Implementation Steps**:
+1. Implement state transition logic
+2. Implement state validation functions
+3. Add state change callbacks
+4. Implement thread-safe state access
+
+**Testing Strategy**:
+- Test all valid state transitions
+- Test invalid state transitions (should fail)
+- Test concurrent state access
+- Verify state machine diagram matches implementation
+
+### 1.3 Queue Management
+
+**Files to Create**:
+- `src/dll/dll_queue.c` - Queue implementation
+- `include/ethercat/dll_queue.h` - Queue interface
+
+**Implementation Steps**:
+1. Implement circular buffer for TX queue
+2. Implement circular buffer for RX queue
+3. Add priority queue support for TX
+4. Implement queue statistics tracking
+5. Add overflow/underflow handling
+
+**Testing Strategy**:
+- Test queue enqueue/dequeue operations
+- Test queue full/empty conditions
+- Test priority ordering
+- Test concurrent access (if multi-threaded)
+- Verify no memory leaks
+
+### 1.4 Initialization and Configuration
+
+**Files to Create**:
+- `src/dll/dll_init.c` - Initialization implementation
+- `include/ethercat/dll.h` - Main DLL interface
+
+**Implementation Steps**:
+1. Implement dl_init() function
+2. Implement dl_shutdown() function
+3. Implement dl_set_parameter() function
+4. Implement dl_get_parameter() function
+5. Add configuration validation
+6. Add resource allocation/deallocation
+
+**Testing Strategy**:
+- Test initialization with valid configuration
+- Test initialization with invalid configuration
+- Test parameter get/set operations
+- Test shutdown and cleanup
+- Verify no resource leaks
+
+### 1.5 Frame Transmission
+
+**Files to Create**:
+- `src/dll/dll_tx.c` - Transmission implementation
+- `include/ethercat/dll_tx.h` - Transmission interface
+
+**Implementation Steps**:
+1. Implement dl_send_req() function
+2. Implement send confirmation callback mechanism
+3. Implement dl_register_send_callback() function
+4. Add frame validation
+5. Integrate with TX queue
+6. Add transmission statistics
+
+**Testing Strategy**:
+- Test frame transmission with valid frames
+- Test frame transmission with invalid frames
+- Test callback invocation
+- Test queue overflow handling
+- Measure transmission latency
+
+### 1.6 Frame Reception
+
+**Files to Create**:
+- `src/dll/dll_rx.c` - Reception implementation
+- `include/ethercat/dll_rx.h` - Reception interface
+
+**Implementation Steps**:
+1. Implement frame reception handler
+2. Implement receive indication callback mechanism
+3. Implement dl_register_receive_callback() function
+4. Add frame validation
+5. Integrate with RX queue
+6. Add reception statistics
+
+**Testing Strategy**:
+- Test frame reception with valid frames
+- Test frame reception with invalid frames
+- Test callback invocation
+- Test queue overflow handling
+- Measure reception latency
+
+### 1.7 Control Functions
+
+**Files to Create**:
+- `src/dll/dll_control.c` - Control functions implementation
+
+**Implementation Steps**:
+1. Implement dl_start() function
+2. Implement dl_stop() function
+3. Implement dl_reset() function
+4. Implement dl_get_state() function
+5. Add state transition validation
+
+**Testing Strategy**:
+- Test start/stop operations
+- Test reset from error state
+- Test state query function
+- Verify state transitions
+
+### 1.8 Statistics and Diagnostics
+
+**Files to Create**:
+- `src/dll/dll_stats.c` - Statistics implementation
+- `include/ethercat/dll_stats.h` - Statistics interface
+
+**Implementation Steps**:
+1. Implement dl_get_statistics() function
+2. Implement dl_reset_statistics() function
+3. Add counter increment logic throughout DLL
+4. Add timing measurements (cycle time tracking)
+
+**Testing Strategy**:
+- Test statistics collection
+- Test statistics reset
+- Verify counter accuracy
+- Test timing measurements
+
+### 1.9 Error Handling
+
+**Files to Create**:
+- `src/dll/dll_error.c` - Error handling implementation
+
+**Implementation Steps**:
+1. Implement dl_get_last_error() function
+2. Implement dl_get_error_string() function
+3. Implement dl_register_error_callback() function
+4. Add error logging mechanism
+5. Add error recovery logic
+
+**Testing Strategy**:
+- Test error code retrieval
+- Test error string conversion
+- Test error callback invocation
+- Test error recovery
+
+### 1.10 Hardware Abstraction Layer (HAL)
+
+**Files to Create**:
+- `src/dll/dll_hal.c` - Hardware abstraction implementation
+- `include/ethercat/dll_hal.h` - HAL interface
+
+**Implementation Steps**:
+1. Define HAL interface for Ethernet hardware
+2. Implement HAL initialization
+3. Implement HAL frame send function
+4. Implement HAL frame receive function
+5. Add platform-specific implementations (Linux, bare-metal, etc.)
+
+**Testing Strategy**:
+- Test HAL with mock hardware
+- Test HAL with real hardware (if available)
+- Verify platform independence
+
+### Phase 1 Milestones
+
+- [ ] M1.1: Core data structures defined and tested
+- [ ] M1.2: State machine implemented and tested
+- [ ] M1.3: Queue management implemented and tested
+- [ ] M1.4: Initialization/configuration implemented and tested
+- [ ] M1.5: Frame transmission implemented and tested
+- [ ] M1.6: Frame reception implemented and tested
+- [ ] M1.7: Control functions implemented and tested
+- [ ] M1.8: Statistics/diagnostics implemented and tested
+- [ ] M1.9: Error handling implemented and tested
+- [ ] M1.10: HAL implemented and tested
+- [ ] M1.11: Phase 1 integration testing complete
+- [ ] M1.12: Phase 1 documentation complete
+
+---
+
+## Phase 2: Data Link Layer Protocol
+
+**Status**: Not Started
+**Based on**: ETG1000_4 - Data Link Layer Protocol
+**Dependencies**: Phase 1 (DLL Services)
+
+### 2.1 EtherCAT Frame Structure
+
+**Files to Create**:
+- `include/ethercat/frame.h` - Frame structure definitions
+- `src/dll/frame_parser.c` - Frame parsing implementation
+- `src/dll/frame_builder.c` - Frame building implementation
+
+**Implementation Steps**:
+1. Define EtherCAT frame header structure
+2. Define EtherCAT datagram structure
+3. Implement frame parsing functions
+4. Implement frame building functions
+5. Add frame validation (CRC, length checks)
+
+**Testing Strategy**:
+- Test frame parsing with valid frames
+- Test frame parsing with invalid frames
+- Test frame building
+- Verify CRC calculation
+- Test various datagram types
+
+### 2.2 Datagram Types
+
+**Files to Create**:
+- `include/ethercat/datagram.h` - Datagram type definitions
+- `src/dll/datagram.c` - Datagram handling implementation
+
+**Implementation Steps**:
+1. Implement APRD (Auto-increment Physical Read)
+2. Implement APWR (Auto-increment Physical Write)
+3. Implement APRW (Auto-increment Physical Read/Write)
+4. Implement FPRD (Configured Physical Read)
+5. Implement FPWR (Configured Physical Write)
+6. Implement FPRW (Configured Physical Read/Write)
+7. Implement BRD (Broadcast Read)
+8. Implement BWR (Broadcast Write)
+9. Implement BRW (Broadcast Read/Write)
+10. Implement LRD (Logical Read)
+11. Implement LWR (Logical Write)
+12. Implement LRW (Logical Read/Write)
+
+**Testing Strategy**:
+- Test each datagram type individually
+- Test datagram chaining (multiple datagrams in one frame)
+- Verify addressing modes
+- Test working counter handling
+
+### 2.3 Addressing Modes
+
+**Files to Create**:
+- `src/dll/addressing.c` - Addressing implementation
+- `include/ethercat/addressing.h` - Addressing interface
+
+**Implementation Steps**:
+1. Implement auto-increment addressing
+2. Implement configured (fixed) addressing
+3. Implement logical addressing
+4. Add address translation functions
+
+**Testing Strategy**:
+- Test each addressing mode
+- Test address range validation
+- Test address collision detection
+
+### 2.4 Working Counter
+
+**Files to Create**:
+- `src/dll/working_counter.c` - Working counter implementation
+
+**Implementation Steps**:
+1. Implement working counter validation
+2. Add working counter error detection
+3. Implement working counter statistics
+
+**Testing Strategy**:
+- Test working counter validation
+- Test error detection
+- Verify counter increments
+
+### Phase 2 Milestones
+
+- [ ] M2.1: Frame structure defined and tested
+- [ ] M2.2: All datagram types implemented and tested
+- [ ] M2.3: Addressing modes implemented and tested
+- [ ] M2.4: Working counter handling implemented and tested
+- [ ] M2.5: Phase 2 integration testing complete
+- [ ] M2.6: Phase 2 documentation complete
+
+---
+
+## Phase 3: Application Layer Services
+
+**Status**: Not Started
+**Based on**: ETG1000_5 - Application Layer Services
+**Dependencies**: Phase 2 (DLL Protocol)
+
+### 3.1 AL State Machine
+
+**Files to Create**:
+- `include/ethercat/al_state.h` - AL state definitions
+- `src/al/al_state.c` - AL state machine implementation
+
+**Implementation Steps**:
+1. Define AL states (Init, Pre-Op, Safe-Op, Op)
+2. Implement state transition logic
+3. Implement state change commands
+4. Add state monitoring
+
+**Testing Strategy**:
+- Test all state transitions
+- Test invalid transitions
+- Test state change timing
+- Verify state machine diagram
+
+### 3.2 AL Service Primitives
+
+**Files to Create**:
+- `include/ethercat/al_services.h` - AL service definitions
+- `src/al/al_services.c` - AL service implementation
+
+**Implementation Steps**:
+1. Implement AL_Control service
+2. Implement AL_Status service
+3. Implement AL_Event service
+4. Add service callbacks
+
+**Testing Strategy**:
+- Test each service primitive
+- Test service sequencing
+- Verify service timing
+
+### Phase 3 Milestones
+
+- [ ] M3.1: AL state machine implemented and tested
+- [ ] M3.2: AL services implemented and tested
+- [ ] M3.3: Phase 3 integration testing complete
+- [ ] M3.4: Phase 3 documentation complete
+
+---
+
+## Phase 4: Application Layer Protocol
+
+**Status**: Not Started
+**Based on**: ETG1000_6 - Application Layer Protocol
+**Dependencies**: Phase 3 (AL Services)
+
+### 4.1 Mailbox Protocol
+
+**Files to Create**:
+- `include/ethercat/mailbox.h` - Mailbox definitions
+- `src/al/mailbox.c` - Mailbox implementation
+
+**Implementation Steps**:
+1. Define mailbox structure
+2. Implement mailbox send/receive
+3. Add mailbox error handling
+4. Implement mailbox timeout handling
+
+**Testing Strategy**:
+- Test mailbox communication
+- Test mailbox overflow
+- Test timeout handling
+
+### 4.2 CoE (CANopen over EtherCAT)
+
+**Files to Create**:
+- `include/ethercat/coe.h` - CoE definitions
+- `src/al/coe.c` - CoE implementation
+
+**Implementation Steps**:
+1. Implement SDO (Service Data Object) access
+2. Implement SDO upload/download
+3. Implement SDO segmented transfer
+4. Implement PDO (Process Data Object) mapping
+5. Add object dictionary access
+
+**Testing Strategy**:
+- Test SDO read/write
+- Test segmented transfers
+- Test PDO mapping
+- Verify object dictionary access
+
+### 4.3 FoE (File over EtherCAT)
+
+**Files to Create**:
+- `include/ethercat/foe.h` - FoE definitions
+- `src/al/foe.c` - FoE implementation
+
+**Implementation Steps**:
+1. Implement file read
+2. Implement file write
+3. Add file transfer progress tracking
+4. Implement error handling
+
+**Testing Strategy**:
+- Test file upload
+- Test file download
+- Test large file transfers
+- Test error conditions
+
+### 4.4 SoE (Servo over EtherCAT)
+
+**Files to Create**:
+- `include/ethercat/soe.h` - SoE definitions
+- `src/al/soe.c` - SoE implementation
+
+**Implementation Steps**:
+1. Implement IDN (Identification Number) access
+2. Implement SoE read/write
+3. Add servo parameter access
+
+**Testing Strategy**:
+- Test IDN read/write
+- Test servo parameter access
+- Verify timing requirements
+
+### 4.5 VoE (Vendor over EtherCAT)
+
+**Files to Create**:
+- `include/ethercat/voe.h` - VoE definitions
+- `src/al/voe.c` - VoE implementation
+
+**Implementation Steps**:
+1. Implement vendor-specific protocol
+2. Add VoE message handling
+
+**Testing Strategy**:
+- Test vendor-specific messages
+- Verify protocol flexibility
+
+### Phase 4 Milestones
+
+- [ ] M4.1: Mailbox protocol implemented and tested
+- [ ] M4.2: CoE implemented and tested
+- [ ] M4.3: FoE implemented and tested
+- [ ] M4.4: SoE implemented and tested
+- [ ] M4.5: VoE implemented and tested
+- [ ] M4.6: Phase 4 integration testing complete
+- [ ] M4.7: Phase 4 documentation complete
+
+---
+
+## Phase 5: Integration and Testing
+
+**Status**: Not Started
+**Dependencies**: Phases 1-4
+
+### 5.1 Master Control
+
+**Files to Create**:
+- `include/ethercat/master.h` - Master control interface
+- `src/master/master.c` - Master control implementation
+
+**Implementation Steps**:
+1. Implement master initialization
+2. Implement network scanning
+3. Implement slave configuration
+4. Implement cyclic operation
+5. Add topology detection
+
+**Testing Strategy**:
+- Test with single slave
+- Test with multiple slaves
+- Test various topologies
+- Test error recovery
+
+### 5.2 Distributed Clocks
+
+**Files to Create**:
+- `include/ethercat/dc.h` - DC definitions
+- `src/master/dc.c` - DC implementation
+
+**Implementation Steps**:
+1. Implement DC synchronization
+2. Implement DC drift compensation
+3. Add DC monitoring
+
+**Testing Strategy**:
+- Test DC synchronization accuracy
+- Test drift compensation
+- Measure jitter
+
+### 5.3 Network Configuration
+
+**Files to Create**:
+- `src/master/config.c` - Configuration implementation
+- `include/ethercat/config.h` - Configuration interface
+
+**Implementation Steps**:
+1. Implement slave configuration database
+2. Implement ENI (EtherCAT Network Information) parser
+3. Add configuration validation
+
+**Testing Strategy**:
+- Test configuration loading
+- Test configuration validation
+- Test various slave types
+
+### 5.4 Example Applications
+
+**Files to Create**:
+- `examples/simple_master.c` - Simple master example
+- `examples/cyclic_io.c` - Cyclic I/O example
+- `examples/sdo_access.c` - SDO access example
+
+**Implementation Steps**:
+1. Create simple master example
+2. Create cyclic I/O example
+3. Create SDO access example
+4. Add documentation for examples
+
+### 5.5 System Testing
+
+**Testing Strategy**:
+- Performance testing (cycle time, latency, jitter)
+- Stress testing (long-duration runs, high load)
+- Conformance testing (against ETG specifications)
+- Interoperability testing (with various slave devices)
+- Error injection testing
+- Memory leak testing
+- Thread safety testing
+
+### Phase 5 Milestones
+
+- [ ] M5.1: Master control implemented and tested
+- [ ] M5.2: Distributed Clocks implemented and tested
+- [ ] M5.3: Network configuration implemented and tested
+- [ ] M5.4: Example applications created
+- [ ] M5.5: System testing complete
+- [ ] M5.6: Performance benchmarks documented
+- [ ] M5.7: Final documentation complete
+
+---
+
+## Build System
+
+### Directory Structure
+
+```
+ethercat-master/
+├── include/
+│   └── ethercat/
+│       ├── dll.h
+│       ├── dll_types.h
+│       ├── dll_config.h
+│       ├── dll_errors.h
+│       ├── frame.h
+│       ├── datagram.h
+│       ├── al_state.h
+│       ├── al_services.h
+│       ├── mailbox.h
+│       ├── coe.h
+│       ├── foe.h
+│       ├── soe.h
+│       ├── voe.h
+│       ├── master.h
+│       └── dc.h
+├── src/
+│   ├── dll/
+│   │   ├── dll_init.c
+│   │   ├── dll_state.c
+│   │   ├── dll_queue.c
+│   │   ├── dll_tx.c
+│   │   ├── dll_rx.c
+│   │   ├── dll_control.c
+│   │   ├── dll_stats.c
+│   │   ├── dll_error.c
+│   │   ├── dll_hal.c
+│   │   ├── frame_parser.c
+│   │   ├── frame_builder.c
+│   │   ├── datagram.c
+│   │   └── addressing.c
+│   ├── al/
+│   │   ├── al_state.c
+│   │   ├── al_services.c
+│   │   ├── mailbox.c
+│   │   ├── coe.c
+│   │   ├── foe.c
+│   │   ├── soe.c
+│   │   └── voe.c
+│   └── master/
+│       ├── master.c
+│       ├── dc.c
+│       └── config.c
+├── tests/
+│   ├── dll/
+│   ├── al/
+│   └── master/
+├── examples/
+│   ├── simple_master.c
+│   ├── cyclic_io.c
+│   └── sdo_access.c
+├── docs/
+├── Makefile
+└── README.md
+```
+
+### Build Configuration
+
+**Compiler**: GCC with C11 support
+**Build Tool**: Make or CMake
+**Testing Framework**: Unity or custom framework
+
+**Compiler Flags**:
+```
+-std=c11
+-Wall -Wextra -Werror
+-O2 (for release)
+-g -O0 (for debug)
+-fno-strict-aliasing
+-D_POSIX_C_SOURCE=200809L
+```
+
+---
+
+## Testing Strategy
+
+### Unit Testing
+- Each module has dedicated unit tests
+- Mock hardware interfaces for testing
+- Code coverage target: >90%
+
+### Integration Testing
+- Test layer interactions
+- Test complete protocol flows
+- Test error scenarios
+
+### System Testing
+- Test with real hardware (if available)
+- Performance benchmarking
+- Conformance testing
+
+### Continuous Integration
+- Automated build on commit
+- Automated test execution
+- Static analysis (cppcheck, clang-tidy)
+- Memory leak detection (valgrind)
+
+---
+
+## Documentation Requirements
+
+### Code Documentation
+- Doxygen comments for all public APIs
+- Implementation notes for complex algorithms
+- State machine diagrams
+- Sequence diagrams
+
+### User Documentation
+- API reference manual
+- User guide
+- Example code with explanations
+- Porting guide for different platforms
+
+---
+
+## Current Status Summary
+
+| Phase | Status | Completion |
+|-------|--------|------------|
+| Phase 1: DLL Services | In Progress | 10% |
+| Phase 2: DLL Protocol | Not Started | 0% |
+| Phase 3: AL Services | Not Started | 0% |
+| Phase 4: AL Protocol | Not Started | 0% |
+| Phase 5: Integration | Not Started | 0% |
+
+**Next Steps**:
+1. Complete Phase 1.1: Core data structures
+2. Implement Phase 1.2: State machine
+3. Implement Phase 1.3: Queue management
+
+---
+
+## Revision History
+
+| Version | Date | Author | Description |
+|---------|------|--------|-------------|
+| 1.0.0 | 2026-01-03 | Claude Code | Initial implementation plan |
+
