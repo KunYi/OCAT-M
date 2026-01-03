@@ -286,6 +286,61 @@ al_status_t al_register_callbacks(al_state_change_cb_t state_change_cb,
 al_status_t al_unregister_callbacks(void);
 
 /* ========================================================================== */
+/* Port-Specific Functions (Redundancy Support)                              */
+/* ========================================================================== */
+
+/**
+ * @brief Request AL state change for a slave on specific port
+ *
+ * @param slave_address Slave station address
+ * @param requested_state Requested AL state
+ * @param port Port to use (0 = primary, 1 = secondary)
+ * @param timeout_ms Timeout in milliseconds
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_request_state_port(uint16_t slave_address,
+                                   al_state_t requested_state,
+                                   uint8_t port,
+                                   uint32_t timeout_ms);
+
+/**
+ * @brief Get current AL state of a slave via specific port
+ *
+ * @param slave_address Slave station address
+ * @param port Port to use (0 = primary, 1 = secondary)
+ * @param state Pointer to receive current state
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_get_state_port(uint16_t slave_address,
+                               uint8_t port,
+                               al_state_t* state);
+
+/**
+ * @brief Send mailbox message to slave via specific port
+ *
+ * @param req Pointer to mailbox send request
+ * @param port Port to use (0 = primary, 1 = secondary)
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_mailbox_send_port(const mbx_send_req_t* req, uint8_t port);
+
+/**
+ * @brief Receive mailbox message from slave via specific port
+ *
+ * @param slave_address Slave station address
+ * @param port Port to use (0 = primary, 1 = secondary)
+ * @param type Pointer to receive mailbox type
+ * @param data Buffer for received data
+ * @param length Pointer to buffer length (in: max, out: actual)
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_mailbox_receive_port(uint16_t slave_address,
+                                     uint8_t port,
+                                     mailbox_type_t* type,
+                                     uint8_t* data,
+                                     uint16_t* length);
+
+/* ========================================================================== */
 /* Utility Functions                                                         */
 /* ========================================================================== */
 
