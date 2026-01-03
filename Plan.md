@@ -492,95 +492,278 @@ This implementation plan follows a bottom-up approach, starting with the Data Li
 
 ---
 
-## Phase 5: Integration and Testing
+## Phase 5: Process Data and Cyclic Operation
 
 **Status**: Not Started
-**Dependencies**: Phases 1-4
+**Based on**: ETG1000 Series - Process Data Exchange
+**Dependencies**: Phase 4 (Master Control, Network Scanning, Slave Configuration, DC)
 
-### 5.1 Master Control
+### 5.1 Process Data Core Infrastructure
 
 **Files to Create**:
-- `include/ethercat/master.h` - Master control interface
-- `src/master/master.c` - Master control implementation
+- `include/ethercat/process_data.h` - Process data API definitions
+- `src/master/process_data.c` - Process data implementation
 
 **Implementation Steps**:
-1. Implement master initialization
-2. Implement network scanning
-3. Implement slave configuration
-4. Implement cyclic operation
-5. Add topology detection
+1. Define process data status codes and enums
+2. Define process data image structure
+3. Define slave mapping structure
+4. Define statistics structure
+5. Add documentation comments for all types
 
 **Testing Strategy**:
-- Test with single slave
-- Test with multiple slaves
-- Test various topologies
-- Test error recovery
+- Verify structure sizes and alignment
+- Test enum value ranges
+- Validate structure packing
 
-### 5.2 Distributed Clocks
+### 5.2 Process Data Image Management
 
 **Files to Create**:
-- `include/ethercat/dc.h` - DC definitions
-- `src/master/dc.c` - DC implementation
+- Continue in `src/master/process_data.c`
 
 **Implementation Steps**:
-1. Implement DC synchronization
-2. Implement DC drift compensation
-3. Add DC monitoring
+1. Implement `pd_init()` function
+2. Implement `pd_shutdown()` function
+3. Implement `pd_allocate_image()` function
+4. Implement `pd_free_image()` function
+5. Implement `pd_map_slave()` function
+6. Add memory management and validation
 
 **Testing Strategy**:
-- Test DC synchronization accuracy
-- Test drift compensation
-- Measure jitter
+- Test image allocation with various sizes
+- Test image deallocation and cleanup
+- Test slave mapping with multiple slaves
+- Verify no memory leaks
+- Test boundary conditions
 
-### 5.3 Network Configuration
+### 5.3 LRW Command Implementation
 
 **Files to Create**:
-- `src/master/config.c` - Configuration implementation
-- `include/ethercat/config.h` - Configuration interface
+- Continue in `src/master/process_data.c`
 
 **Implementation Steps**:
-1. Implement slave configuration database
-2. Implement ENI (EtherCAT Network Information) parser
-3. Add configuration validation
+1. Implement LRW frame building using frame_builder
+2. Implement `pd_exchange()` function
+3. Implement frame transmission via DLL
+4. Implement frame reception and parsing
+5. Add working counter extraction and validation
+6. Implement timeout handling
 
 **Testing Strategy**:
-- Test configuration loading
-- Test configuration validation
-- Test various slave types
+- Test LRW frame structure
+- Test data exchange with mock slaves
+- Test working counter validation
+- Test timeout scenarios
+- Measure exchange latency
 
-### 5.4 Example Applications
+### 5.4 Working Counter Validation
 
 **Files to Create**:
-- `examples/simple_master.c` - Simple master example
-- `examples/cyclic_io.c` - Cyclic I/O example
-- `examples/sdo_access.c` - SDO access example
+- Continue in `src/master/process_data.c`
 
 **Implementation Steps**:
-1. Create simple master example
-2. Create cyclic I/O example
-3. Create SDO access example
+1. Implement `pd_validate_wkc()` function
+2. Add expected WKC calculation (slave_count × 2)
+3. Implement WKC error detection
+4. Add WKC statistics tracking
+
+**Testing Strategy**:
+- Test WKC validation with correct values
+- Test WKC error detection
+- Test WKC statistics accuracy
+
+### 5.5 Statistics and Monitoring
+
+**Files to Create**:
+- Continue in `src/master/process_data.c`
+
+**Implementation Steps**:
+1. Implement `pd_get_statistics()` function
+2. Implement `pd_reset_statistics()` function
+3. Add cycle time measurement (min/max/avg)
+4. Add error counters (WKC errors, timeouts)
+5. Implement statistics update logic
+
+**Testing Strategy**:
+- Test statistics collection
+- Test statistics reset
+- Verify counter accuracy
+- Test timing measurements
+
+### 5.6 Master Integration (Basic)
+
+**Files to Modify**:
+- `src/master/master.c` - Add process data integration
+- `src/master/master_internal.h` - Add PD context
+
+**Implementation Steps**:
+1. Add PD context to master_context_t
+2. Implement `master_allocate_process_data()` function
+3. Implement `master_free_process_data()` function
+4. Implement `master_get_process_data_image()` function
+5. Implement `master_write_slave_output()` function
+6. Implement `master_read_slave_input()` function
+7. Implement `master_get_cyclic_statistics()` function
+8. Update `master_process_cycle()` to call pd_exchange()
+
+**Testing Strategy**:
+- Test master PD allocation
+- Test slave data read/write
+- Test cyclic operation
+- Verify integration with existing master functions
+
+### 5.7 Redundancy Support (Optional - Phase 5.2)
+
+**Status**: Optional Extension
+**Priority**: Low (implement after basic functionality)
+
+**Files to Create/Modify**:
+- `include/ethercat/hal_types.h` - Add multi-port types
+- `src/hal/hal.c` - Add multi-port support
+- `src/hal/hal_linux.c` - Add multi-interface support
+- `src/master/process_data.c` - Add redundancy logic
+
+**Implementation Steps**:
+1. Define redundancy modes (NONE, CABLE, FRAME, HOT_CONNECT)
+2. Define port selection enums
+3. Define redundancy configuration structure
+4. Define port status structure
+5. Implement `hal_init_multiport()` function
+6. Implement `hal_send_frame_port()` function
+7. Implement `hal_receive_frame_port()` function
+8. Implement `hal_is_port_link_up()` function
+9. Implement `hal_get_port_statistics()` function
+10. Implement `pd_exchange_port()` function
+11. Implement `pd_switch_port()` function
+12. Implement `pd_check_port_health()` function
+13. Implement `pd_get_port_status()` function
+14. Add automatic port switching logic
+15. Add redundancy statistics
+
+**Testing Strategy**:
+- Test single port mode (backward compatibility)
+- Test dual port initialization
+- Test port switching (manual and automatic)
+- Test cable redundancy (ring topology)
+- Test frame redundancy (dual send)
+- Test port failure scenarios
+- Verify redundancy statistics
+
+### 5.8 Example Applications
+
+**Files to Create**:
+- `examples/simple_cyclic.c` - Simple cyclic I/O example
+- `examples/process_data_demo.c` - Process data demonstration
+- `examples/redundancy_demo.c` - Redundancy demonstration (optional)
+
+**Implementation Steps**:
+1. Create simple cyclic I/O example
+2. Create process data access example
+3. Create redundancy example (if Phase 5.2 implemented)
 4. Add documentation for examples
 
-### 5.5 System Testing
+**Testing Strategy**:
+- Verify examples compile
+- Test examples with mock slaves
+- Document expected behavior
+
+### 5.9 Performance Optimization
+
+**Implementation Steps**:
+1. Profile cycle time performance
+2. Optimize frame building/parsing
+3. Optimize memory access patterns
+4. Add zero-copy optimizations where possible
+5. Optimize working counter validation
 
 **Testing Strategy**:
-- Performance testing (cycle time, latency, jitter)
-- Stress testing (long-duration runs, high load)
-- Conformance testing (against ETG specifications)
-- Interoperability testing (with various slave devices)
-- Error injection testing
-- Memory leak testing
-- Thread safety testing
+- Measure cycle time (target: <100μs for typical setup)
+- Measure jitter (target: <10μs)
+- Test with various slave counts
+- Compare with baseline performance
+
+### 5.10 System Testing
+
+**Testing Strategy**:
+- **Functional Testing**:
+  - Test with single slave
+  - Test with multiple slaves (2, 4, 8, 16)
+  - Test various data sizes
+  - Test error scenarios (WKC errors, timeouts)
+
+- **Performance Testing**:
+  - Measure cycle time (min/max/avg)
+  - Measure latency
+  - Measure jitter
+  - Test at various cycle rates (1kHz, 4kHz, 10kHz)
+
+- **Stress Testing**:
+  - Long-duration runs (24+ hours)
+  - High cycle rates
+  - Large data volumes
+
+- **Integration Testing**:
+  - Test with Phase 1-4 components
+  - Test state transitions during cyclic operation
+  - Test CoE access during cyclic operation
+
+- **Redundancy Testing** (if Phase 5.2 implemented):
+  - Test port switching
+  - Test cable break scenarios
+  - Test hot connect/disconnect
 
 ### Phase 5 Milestones
 
-- [ ] M5.1: Master control implemented and tested
-- [ ] M5.2: Distributed Clocks implemented and tested
-- [ ] M5.3: Network configuration implemented and tested
-- [ ] M5.4: Example applications created
-- [ ] M5.5: System testing complete
-- [ ] M5.6: Performance benchmarks documented
-- [ ] M5.7: Final documentation complete
+#### Phase 5.1 - Basic Process Data (Priority: HIGH)
+- [ ] M5.1.1: Process data types and API defined (process_data.h)
+- [ ] M5.1.2: Process data core implementation (process_data.c)
+- [ ] M5.1.3: Image allocation/deallocation implemented
+- [ ] M5.1.4: Slave mapping implemented
+- [ ] M5.1.5: LRW command implementation complete
+- [ ] M5.1.6: Frame building/parsing for LRW
+- [ ] M5.1.7: Data exchange function implemented
+- [ ] M5.1.8: Working counter validation implemented
+- [ ] M5.1.9: Statistics and monitoring implemented
+- [ ] M5.1.10: Master integration complete
+- [ ] M5.1.11: Basic cyclic operation working
+- [ ] M5.1.12: Unit tests complete
+- [ ] M5.1.13: Integration tests complete
+- [ ] M5.1.14: Documentation complete
+
+#### Phase 5.2 - Redundancy Support (Priority: LOW - Optional)
+- [ ] M5.2.1: Redundancy types defined
+- [ ] M5.2.2: Multi-port HAL types defined
+- [ ] M5.2.3: HAL multi-port functions implemented
+- [ ] M5.2.4: Port status tracking implemented
+- [ ] M5.2.5: Port switching logic implemented
+- [ ] M5.2.6: Automatic failover implemented
+- [ ] M5.2.7: Cable redundancy tested
+- [ ] M5.2.8: Frame redundancy tested
+- [ ] M5.2.9: Hot connect tested
+- [ ] M5.2.10: Redundancy documentation complete
+
+#### Phase 5.3 - Examples and Testing
+- [ ] M5.3.1: Simple cyclic example created
+- [ ] M5.3.2: Process data demo created
+- [ ] M5.3.3: Redundancy demo created (if applicable)
+- [ ] M5.3.4: Performance benchmarks documented
+- [ ] M5.3.5: System testing complete
+
+### Implementation Priority
+
+**Phase 5.1 (HIGH Priority - Recommended First)**:
+- Essential for basic EtherCAT master functionality
+- Required for real-time process data exchange
+- Foundation for all cyclic operations
+- Estimated effort: 2-3 weeks
+
+**Phase 5.2 (LOW Priority - Optional)**:
+- Advanced feature for high-availability systems
+- Not required for basic operation
+- Can be implemented later if needed
+- Estimated effort: 1-2 weeks
+
+**Recommendation**: Implement Phase 5.1 first, validate with real slaves, then decide if Phase 5.2 redundancy is needed based on application requirements.
 
 ---
 
@@ -765,8 +948,17 @@ ethercat-master/
 6. ⏳ **VoE** (Vendor specific) - Optional
 
 **Next Steps**:
-1. **Phase 5 (Recommended)**: Integration and cyclic operation (LRW for process data)
-2. Phase 3.2-3.6: Implement remaining protocols (FoE, SoE, EoE, AoE, VoE) - All optional
+1. **Phase 5.1 (HIGH Priority - Recommended)**: Process Data and Cyclic Operation
+   - Basic LRW implementation for process data exchange
+   - Working counter validation
+   - Cyclic operation framework
+   - Essential for functional EtherCAT master
+2. **Phase 5.2 (LOW Priority - Optional)**: Redundancy Support
+   - Multi-port HAL support
+   - Cable/Frame redundancy
+   - Hot connect support
+   - Advanced feature for high-availability systems
+3. Phase 3.2-3.6: Implement remaining protocols (FoE, SoE, EoE, AoE, VoE) - All optional
 
 ### Completed Milestones
 
@@ -967,4 +1159,5 @@ Output:       build/lib/libethercat.a
 | 3.1.0 | 2026-01-03 | Claude Code | Updated after Phase 4.1 completion (Network Scanning - Full Implementation) |
 | 4.0.0 | 2026-01-03 | Claude Code | Updated after Phase 4.2 completion (Slave Configuration - Full Implementation) |
 | 4.1.0 | 2026-01-03 | Claude Code | Updated after Phase 4.3 completion (Distributed Clocks - Full Implementation) |
+| 5.0.0 | 2026-01-03 | Claude Code | Added Phase 5 detailed plan (Process Data + Cyclic Operation with Redundancy) |
 

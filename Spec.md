@@ -2310,6 +2310,579 @@ dl_config_t (32 bytes on 32-bit system):
 
 ---
 
+## Process Data and Cyclic Operation
+
+Based on ETG1000 specifications, the Process Data layer provides cyclic exchange of input/output data between master and slaves using logical addressing.
+
+### 5.1 Process Data Service Primitives
+
+#### 5.1.1 PD_Exchange Service
+
+**Purpose**: Exchange process data with all slaves in a single cycle
+
+**Service Primitives**:
+- `PD_Exchange.req` - Request to exchange process data
+- `PD_Exchange.con` - Confirmation with received data and working counter
+
+**Parameters**:
+```c
+typedef struct {
+    uint8_t* output_data;       // Output data to slaves
+    uint32_t output_size;       // Output data size in bytes
+    uint32_t logical_address;   // Logical memory address
+    uint32_t timeout_ms;        // Timeout in milliseconds
+    void* user_data;            // User context pointer
+} pd_exchange_req_t;
+
+typedef struct {
+    uint8_t* input_data;        // Input data from slaves
+    uint32_t input_size;        // Input data size in bytes
+    uint16_t working_counter;   // Working counter value
+    uint8_t status;             // Exchange status
+    void* user_data;            // User context pointer
+} pd_exchange_con_t;
+```
+
+**Status Codes**:
+```c
+typedef enum {
+    PD_STATUS_SUCCESS = 0x00,           /**< Operation successful */
+    PD_STATUS_ERROR = 0x01,             /**< General error */
+    PD_STATUS_TIMEOUT = 0x02,           /**< Operation timeout */
+    PD_STATUS_INVALID_PARAM = 0x03,     /**< Invalid parameter */
+    PD_STATUS_NOT_INITIALIZED = 0x04,   /**< Not initialized */
+    PD_STATUS_WKC_ERROR = 0x05,         /**< Working counter error */
+    PD_STATUS_BUFFER_OVERFLOW = 0x06,   /**< Buffer overflow */
+    PD_STATUS_REDUNDANCY_LOST = 0x07,   /**< Redundancy lost */
+    PD_STATUS_PRIMARY_FAILED = 0x08,    /**< Primary port failed */
+    PD_STATUS_SECONDARY_FAILED = 0x09   /**< Secondary port failed */
+} pd_status_t;
+```
+
+### 5.2 Process Data Structures
+
+#### 5.2.1 Process Data Image
+
+The process data image represents the complete input/output memory space for all slaves.
+
+```c
+/**
+ * @brief Process data image structure
+ */
+typedef struct {
+    /* Data buffers */
+    uint8_t* input_data;                /**< Input process data (from slaves) */
+    uint32_t input_size;                /**< Input data size in bytes */
+    uint8_t* output_data;               /**< Output process data (to slaves) */
+    uint32_t output_size;               /**< Output data size in bytes */
+    uint32_t logical_address;           /**< Logical memory start address */
+
+    /* Redundancy support */
+    pd_redundancy_config_t redundancy;  /**< Redundancy configuration */
+    pd_port_status_t port_status[2];    /**< Status for primary/secondary ports */
+    pd_port_select_t current_port;      /**< Currently active port */
+
+    /* Frame management */
+    uint8_t frame_index;                /**< Frame index for identification */
+    bool frame_pending;                 /**< Frame transmission pending */
+} pd_image_t;
+```
+
+#### 5.2.2 Slave Process Data Mapping
+
+Each slave's process data is mapped to a specific offset in the process data image.
+
+```c
+/**
+ * @brief Slave process data mapping
+ */
+typedef struct {
+    uint16_t station_address;           /**< Slave station address */
+    uint32_t input_offset;              /**< Input data offset in image */
+    uint32_t input_size;                /**< Input data size in bytes */
+    uint32_t output_offset;             /**< Output data offset in image */
+    uint32_t output_size;               /**< Output data size in bytes */
+    uint32_t logical_input_address;     /**< Logical input address */
+    uint32_t logical_output_address;    /**< Logical output address */
+} pd_slave_mapping_t;
+```
+
+### 5.3 Redundancy Support
+
+#### 5.3.1 Redundancy Modes
+
+```c
+/**
+ * @brief Redundancy mode
+ */
+typedef enum {
+    PD_REDUNDANCY_NONE = 0,             /**< No redundancy */
+    PD_REDUNDANCY_CABLE,                /**< Cable redundancy (ring topology) */
+    PD_REDUNDANCY_FRAME,                /**< Frame redundancy (dual send) */
+    PD_REDUNDANCY_HOT_CONNECT           /**< Hot connect support */
+} pd_redundancy_mode_t;
+```
+
+**Cable Redundancy**: Ring topology with automatic cable break detection and recovery.
+
+**Frame Redundancy**: Frames sent on both primary and secondary ports simultaneously, first valid response is used.
+
+**Hot Connect**: Support for dynamic slave connection/disconnection without stopping cyclic operation.
+
+#### 5.3.2 Port Selection
+
+```c
+/**
+ * @brief Port selection for redundancy
+ */
+typedef enum {
+    PD_PORT_PRIMARY = 0,                /**< Primary port */
+    PD_PORT_SECONDARY = 1,              /**< Secondary port */
+    PD_PORT_AUTO = 2                    /**< Automatic selection */
+} pd_port_select_t;
+```
+
+#### 5.3.3 Redundancy Configuration
+
+```c
+/**
+ * @brief Redundancy configuration
+ */
+typedef struct {
+    pd_redundancy_mode_t mode;          /**< Redundancy mode */
+    pd_port_select_t active_port;       /**< Active port selection */
+    bool auto_switch;                   /**< Automatic port switching */
+    uint32_t switch_threshold_ms;       /**< Switch threshold (milliseconds) */
+    uint32_t health_check_interval_ms;  /**< Health check interval */
+} pd_redundancy_config_t;
+```
+
+#### 5.3.4 Port Status
+
+```c
+/**
+ * @brief Port status information
+ */
+typedef struct {
+    bool link_up;                       /**< Link status */
+    bool active;                        /**< Port is active */
+    uint64_t frames_sent;               /**< Frames sent on this port */
+    uint64_t frames_received;           /**< Frames received on this port */
+    uint64_t errors;                    /**< Error count */
+    uint32_t last_wkc;                  /**< Last working counter */
+    uint64_t last_success_time_ns;      /**< Last successful exchange time */
+} pd_port_status_t;
+```
+
+### 5.4 Cyclic Operation Statistics
+
+```c
+/**
+ * @brief Cyclic operation statistics
+ */
+typedef struct {
+    /* Cycle statistics */
+    uint64_t cycle_count;               /**< Total cycles executed */
+    uint64_t wkc_error_count;           /**< Working counter errors */
+    uint64_t timeout_count;             /**< Timeout errors */
+    uint32_t min_cycle_time_us;         /**< Minimum cycle time (microseconds) */
+    uint32_t max_cycle_time_us;         /**< Maximum cycle time (microseconds) */
+    uint32_t avg_cycle_time_us;         /**< Average cycle time (microseconds) */
+    uint16_t last_working_counter;      /**< Last working counter value */
+    uint16_t expected_working_counter;  /**< Expected working counter */
+
+    /* Redundancy statistics */
+    uint64_t port_switch_count;         /**< Number of port switches */
+    uint64_t redundancy_loss_count;     /**< Redundancy loss events */
+    uint64_t primary_error_count;       /**< Primary port errors */
+    uint64_t secondary_error_count;     /**< Secondary port errors */
+    pd_port_select_t active_port;       /**< Currently active port */
+    bool redundancy_available;          /**< Redundancy is available */
+} pd_statistics_t;
+```
+
+### 5.5 Process Data API Functions
+
+#### 5.5.1 Initialization and Shutdown
+
+```c
+/**
+ * @brief Initialize process data module
+ *
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_init(void);
+
+/**
+ * @brief Shutdown process data module
+ *
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_shutdown(void);
+```
+
+#### 5.5.2 Image Management
+
+```c
+/**
+ * @brief Allocate process data image
+ *
+ * @param image Pointer to image structure
+ * @param input_size Input data size in bytes
+ * @param output_size Output data size in bytes
+ * @param redundancy Redundancy configuration (NULL for no redundancy)
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_allocate_image(pd_image_t* image,
+                               uint32_t input_size,
+                               uint32_t output_size,
+                               const pd_redundancy_config_t* redundancy);
+
+/**
+ * @brief Free process data image
+ *
+ * @param image Pointer to image structure
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_free_image(pd_image_t* image);
+
+/**
+ * @brief Map slave process data to image
+ *
+ * @param slave_count Number of slaves
+ * @param mappings Array of slave mappings
+ * @param image Pointer to image structure
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_map_slave(uint16_t slave_count,
+                          const pd_slave_mapping_t* mappings,
+                          pd_image_t* image);
+```
+
+#### 5.5.3 Data Exchange
+
+```c
+/**
+ * @brief Exchange process data (LRW command)
+ *
+ * This function sends output data and receives input data in a single frame
+ * using the LRW (Logical Read/Write) command.
+ *
+ * @param image Pointer to process data image
+ * @param working_counter Pointer to receive working counter
+ * @param timeout_ms Timeout in milliseconds
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_exchange(pd_image_t* image,
+                         uint16_t* working_counter,
+                         uint32_t timeout_ms);
+
+/**
+ * @brief Exchange process data on specific port
+ *
+ * @param image Pointer to process data image
+ * @param port Port selection
+ * @param working_counter Pointer to receive working counter
+ * @param timeout_ms Timeout in milliseconds
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_exchange_port(pd_image_t* image,
+                              pd_port_select_t port,
+                              uint16_t* working_counter,
+                              uint32_t timeout_ms);
+```
+
+#### 5.5.4 Working Counter Validation
+
+```c
+/**
+ * @brief Validate working counter
+ *
+ * @param expected Expected working counter value
+ * @param actual Actual working counter value
+ * @return true if valid, false otherwise
+ */
+bool pd_validate_wkc(uint16_t expected, uint16_t actual);
+```
+
+#### 5.5.5 Redundancy Control
+
+```c
+/**
+ * @brief Switch active port
+ *
+ * @param image Pointer to process data image
+ * @param new_port New port selection
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_switch_port(pd_image_t* image, pd_port_select_t new_port);
+
+/**
+ * @brief Check port health
+ *
+ * @param image Pointer to process data image
+ * @param port Port to check
+ * @param healthy Pointer to receive health status
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_check_port_health(pd_image_t* image,
+                                  pd_port_select_t port,
+                                  bool* healthy);
+
+/**
+ * @brief Get port status
+ *
+ * @param image Pointer to process data image
+ * @param port Port selection
+ * @param status Pointer to receive port status
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_get_port_status(pd_image_t* image,
+                                pd_port_select_t port,
+                                pd_port_status_t* status);
+```
+
+#### 5.5.6 Statistics
+
+```c
+/**
+ * @brief Get process data statistics
+ *
+ * @param stats Pointer to receive statistics
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_get_statistics(pd_statistics_t* stats);
+
+/**
+ * @brief Reset process data statistics
+ *
+ * @return PD_STATUS_SUCCESS on success, error code otherwise
+ */
+pd_status_t pd_reset_statistics(void);
+```
+
+### 5.6 LRW Command Implementation
+
+The LRW (Logical Read/Write) command is used for efficient process data exchange.
+
+#### 5.6.1 LRW Frame Structure
+
+```
+Ethernet Header (14 bytes)
+├── Destination MAC: FF:FF:FF:FF:FF:FF (broadcast)
+├── Source MAC: Master MAC address
+└── EtherType: 0x88A4 (EtherCAT)
+
+EtherCAT Header (2 bytes)
+├── Length: Total datagram length
+└── Type: 0x1 (EtherCAT)
+
+LRW Datagram (10 + data + 2 bytes)
+├── Command: 0x0C (LRW)
+├── Index: Frame index
+├── Address: Logical address (32-bit)
+├── Length: Data length (11 bits)
+├── Flags: More, Circulating, Reserved
+├── IRQ: Interrupt request
+├── Data: Input/Output data
+└── WKC: Working Counter (16-bit)
+```
+
+#### 5.6.2 LRW Operation Sequence
+
+```
+Master                                  Slaves
+  |                                       |
+  |--- LRW (Output Data) --------------->|
+  |                                       |
+  |                    [Slave 1 processes]
+  |                    [Slave 2 processes]
+  |                    [Slave N processes]
+  |                                       |
+  |<-- LRW (Input Data + WKC) -----------|
+  |                                       |
+  [Validate WKC]
+  [Update statistics]
+```
+
+#### 5.6.3 Working Counter Calculation
+
+For LRW command:
+- Each slave increments WKC by 2 (read + write)
+- Expected WKC = slave_count × 2
+- Actual WKC < Expected indicates communication error
+
+### 5.7 Master Integration
+
+#### 5.7.1 Master Process Data Functions
+
+```c
+/**
+ * @brief Allocate process data buffers
+ *
+ * @param redundancy Redundancy configuration (NULL for no redundancy)
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_allocate_process_data(const pd_redundancy_config_t* redundancy);
+
+/**
+ * @brief Free process data buffers
+ *
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_free_process_data(void);
+
+/**
+ * @brief Get process data image
+ *
+ * @param image Pointer to receive process data image pointer
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_get_process_data_image(pd_image_t** image);
+
+/**
+ * @brief Write output process data for a slave
+ *
+ * @param position Slave position (0-based)
+ * @param data Pointer to output data
+ * @param length Data length in bytes
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_write_slave_output(uint16_t position,
+                                            const uint8_t* data,
+                                            uint32_t length);
+
+/**
+ * @brief Read input process data from a slave
+ *
+ * @param position Slave position (0-based)
+ * @param data Pointer to receive input data
+ * @param length Data length in bytes
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_read_slave_input(uint16_t position,
+                                         uint8_t* data,
+                                         uint32_t length);
+
+/**
+ * @brief Get cyclic operation statistics
+ *
+ * @param stats Pointer to receive statistics
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_get_cyclic_statistics(pd_statistics_t* stats);
+```
+
+#### 5.7.2 Master Redundancy Functions
+
+```c
+/**
+ * @brief Configure redundancy
+ *
+ * @param config Redundancy configuration
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_configure_redundancy(const master_redundancy_config_t* config);
+
+/**
+ * @brief Get redundancy status
+ *
+ * @param primary Pointer to receive primary port status
+ * @param secondary Pointer to receive secondary port status
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_get_redundancy_status(pd_port_status_t* primary,
+                                              pd_port_status_t* secondary);
+
+/**
+ * @brief Force port switch
+ *
+ * @param new_port New port selection
+ * @return MASTER_STATUS_SUCCESS on success, error code otherwise
+ */
+master_status_t master_switch_port(pd_port_select_t new_port);
+```
+
+### 5.8 HAL Multi-Port Support
+
+#### 5.8.1 Port Types
+
+```c
+/**
+ * @brief Port identifier
+ */
+typedef enum {
+    HAL_PORT_0 = 0,                     /**< Port 0 (primary) */
+    HAL_PORT_1 = 1,                     /**< Port 1 (secondary) */
+    HAL_PORT_AUTO = 0xFF                /**< Auto-select port */
+} hal_port_t;
+```
+
+#### 5.8.2 Multi-Port Configuration
+
+```c
+/**
+ * @brief Multi-port configuration
+ */
+typedef struct {
+    bool enable_port_0;                 /**< Enable port 0 */
+    bool enable_port_1;                 /**< Enable port 1 */
+    const char* interface_name_0;       /**< Interface name for port 0 */
+    const char* interface_name_1;       /**< Interface name for port 1 */
+    uint8_t mac_address_0[6];           /**< MAC address for port 0 */
+    uint8_t mac_address_1[6];           /**< MAC address for port 1 */
+} hal_multiport_config_t;
+```
+
+#### 5.8.3 Multi-Port Functions
+
+```c
+/**
+ * @brief Initialize HAL with multi-port support
+ *
+ * @param config Multi-port configuration
+ * @return HAL_STATUS_SUCCESS on success, error code otherwise
+ */
+hal_status_t hal_init_multiport(const hal_multiport_config_t* config);
+
+/**
+ * @brief Send frame on specific port
+ *
+ * @param buffer Frame buffer
+ * @param port Port selection
+ * @return HAL_STATUS_SUCCESS on success, error code otherwise
+ */
+hal_status_t hal_send_frame_port(hal_frame_buffer_t* buffer, hal_port_t port);
+
+/**
+ * @brief Receive frame from specific port
+ *
+ * @param buffer Pointer to receive frame buffer
+ * @param port Port selection
+ * @return HAL_STATUS_SUCCESS on success, error code otherwise
+ */
+hal_status_t hal_receive_frame_port(hal_frame_buffer_t** buffer, hal_port_t port);
+
+/**
+ * @brief Get port link status
+ *
+ * @param port Port selection
+ * @return true if link is up, false otherwise
+ */
+bool hal_is_port_link_up(hal_port_t port);
+
+/**
+ * @brief Get port statistics
+ *
+ * @param port Port selection
+ * @param stats Pointer to receive statistics
+ * @return HAL_STATUS_SUCCESS on success, error code otherwise
+ */
+hal_status_t hal_get_port_statistics(hal_port_t port, hal_statistics_t* stats);
+```
+
+---
+
 ## Revision History
 
 | Version | Date | Author | Description |
@@ -2318,4 +2891,5 @@ dl_config_t (32 bytes on 32-bit system):
 | 1.1.0 | 2026-01-03 | Claude Code | Added DLL Protocol (ETG1000_4) - Frame structure, datagrams, addressing |
 | 2.0.0 | 2026-01-03 | Claude Code | Added AL Services (ETG1000_5) - State machine, mailbox, sync manager |
 | 2.1.0 | 2026-01-03 | Claude Code | Added AL Protocols (ETG1000_6) - CoE, FoE, SoE, VoE, EoE, AoE |
+| 3.0.0 | 2026-01-03 | Claude Code | Added Process Data and Cyclic Operation with Redundancy Support |
 
