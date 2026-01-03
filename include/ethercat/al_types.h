@@ -355,25 +355,6 @@ typedef void (*al_error_cb_t)(uint16_t slave_address,
 #define AL_MAILBOX_POLL_INTERVAL_MS     1       /**< Mailbox polling interval */
 #define AL_STATUS_CHECK_INTERVAL_MS     10      /**< Status check interval */
 
-/* ========================================================================== */
-/* Slave Information Interface (SII)                                         */
-/* ========================================================================== */
-
-/**
- * @brief SII category types
- */
-typedef enum {
-    SII_CAT_NOP = 0,                    /**< No operation */
-    SII_CAT_STRINGS = 10,               /**< Strings */
-    SII_CAT_DATATYPES = 20,             /**< Data types */
-    SII_CAT_GENERAL = 30,               /**< General information */
-    SII_CAT_FMMU = 40,                  /**< FMMU configuration */
-    SII_CAT_SYNC_MANAGER = 41,          /**< Sync Manager configuration */
-    SII_CAT_TXPDO = 50,                 /**< TxPDO (inputs) */
-    SII_CAT_RXPDO = 51,                 /**< RxPDO (outputs) */
-    SII_CAT_DC = 60                     /**< Distributed Clocks */
-} sii_category_t;
-
 /**
  * @}
  */

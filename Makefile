@@ -55,8 +55,11 @@ HAL_SOURCES = $(wildcard $(SRC_DIR)/hal/*.c)
 # AL source files
 AL_SOURCES = $(wildcard $(SRC_DIR)/al/*.c)
 
+# Master source files
+MASTER_SOURCES = $(wildcard $(SRC_DIR)/master/*.c)
+
 # All source files
-SOURCES = $(DLL_SOURCES) $(HAL_SOURCES) $(AL_SOURCES)
+SOURCES = $(DLL_SOURCES) $(HAL_SOURCES) $(AL_SOURCES) $(MASTER_SOURCES)
 
 # Object files
 OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SOURCES))
@@ -204,6 +207,7 @@ info:
 	@echo "  DLL:      $(words $(DLL_SOURCES)) files"
 	@echo "  HAL:      $(words $(HAL_SOURCES)) files"
 	@echo "  AL:       $(words $(AL_SOURCES)) files"
+	@echo "  Master:   $(words $(MASTER_SOURCES)) files"
 	@echo "  Total:    $(words $(SOURCES)) files"
 	@echo ""
 	@echo "Output:"

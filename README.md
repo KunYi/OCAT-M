@@ -4,7 +4,7 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
 
 ## Project Status
 
-**Current Phase**: Phase 3 - Application Layer Protocols (CoE Complete ✅)
+**Current Phase**: Phase 4 - Network Scanning and Master Control (In Progress 🔄)
 
 ### Completed Components
 
@@ -128,6 +128,70 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
   - `hal_sleep_us()` - Sleep for microseconds
   - Platform implementations: Linux (POSIX) and Stub
 
+#### Phase 4 - Network Scanning and Master Control 🔄 (In Progress)
+
+##### Phase 4.1 - Master Control API ✅
+- **Master Types and API**:
+  - `include/ethercat/master.h` - Master control public API
+  - Master status codes and operational states
+  - Slave information structures
+  - Network topology information
+  - Master configuration structure
+
+- **Master Implementation**:
+  - `src/master/master.c` - Master core implementation (450+ lines)
+  - `src/master/master_internal.h` - Internal definitions
+
+- **Features**:
+  - Master initialization and shutdown
+  - Network scanning orchestration
+  - Slave configuration management
+  - State management (IDLE, INIT, SCANNING, CONFIGURING, PREOP, SAFEOP, OP)
+  - Cyclic operation control
+  - Integration with DLL, HAL, AL, and CoE layers
+
+- **API Functions**:
+  - `master_init()` / `master_shutdown()` - Master lifecycle
+  - `master_scan_network()` - Discover and configure slaves
+  - `master_get_slave_count()` - Get number of slaves
+  - `master_get_slave_info()` - Get slave information
+  - `master_get_topology()` - Get network topology
+  - `master_configure_slaves()` - Configure all slaves
+  - `master_request_state()` - Request AL state change
+  - `master_start_cyclic()` / `master_stop_cyclic()` - Cyclic operation
+  - `master_process_cycle()` - Process one cycle
+
+##### Phase 4.2 - Network Scanning API ✅
+- **Scan Types and API**:
+  - `include/ethercat/scan.h` - Network scanning public API
+  - SII (EEPROM) category definitions
+  - Slave discovery structures
+  - Port descriptor definitions
+
+- **Scan Implementation** (Stub Version):
+  - `src/master/scan.c` - Network scanning implementation (240+ lines)
+  - **NOTE**: Current implementation is a stub with TODO markers
+  - Full implementation requires proper frame_builder/parser integration
+
+- **Planned Features** (TODO):
+  - Slave discovery using BRD (Broadcast Read)
+  - Station address assignment using APWR
+  - EEPROM (SII) reading via ESC registers
+  - Slave identification (Vendor ID, Product Code, Revision, Serial Number)
+  - Slave name reading from EEPROM
+  - Topology detection via port descriptors
+  - Category-based EEPROM reading
+
+- **API Functions**:
+  - `scan_init()` / `scan_shutdown()` - Scan module lifecycle
+  - `scan_discover_slaves()` - Discover all slaves (TODO)
+  - `scan_assign_station_addresses()` - Assign addresses (TODO)
+  - `scan_read_eeprom_word()` - Read EEPROM word (TODO)
+  - `scan_read_slave_id()` - Read slave identification (TODO)
+  - `scan_read_slave_name()` - Read slave name (TODO)
+  - `scan_read_eeprom_category()` - Read EEPROM category (TODO)
+  - `scan_detect_topology()` - Detect network topology (TODO)
+
 ##### Phase 2.3 - Mailbox Communication ✅
 - **Implementation**:
   - `src/al/al_mailbox.c` - Mailbox implementation (267 lines)
@@ -166,7 +230,8 @@ Source Files:
   DLL:      11 files
   HAL:      3 files
   AL:       5 files
-  Total:    19 files
+  Master:   2 files
+  Total:    21 files
 
 Build Status: ✅ Success (0 errors, 0 warnings)
 Output:       build/lib/libethercat.a
