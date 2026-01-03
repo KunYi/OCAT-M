@@ -830,13 +830,1370 @@ uint32_t ecat_calculate_rtt(uint16_t num_slaves, uint32_t cable_length_m);
 
 ## Application Layer Services
 
-*To be defined based on ETG1000_5*
+Based on ETG1000_5 specification, the Application Layer provides services for slave device management, state machine control, and mailbox communication.
+
+### 3.1 AL State Machine
+
+The EtherCAT Application Layer implements a state machine for each slave device. The master controls state transitions through AL Control register writes.
+
+#### 3.1.1 AL States
+
+```c
+/**
+ * @brief Application Layer states
+ */
+typedef enum {
+    AL_STATE_INIT = 0x01,           /**< Init state */
+    AL_STATE_PREOP = 0x02,          /**< Pre-Operational state */
+    AL_STATE_BOOT = 0x03,           /**< Bootstrap state */
+    AL_STATE_SAFEOP = 0x04,         /**< Safe-Operational state */
+    AL_STATE_OP = 0x08              /**< Operational state */
+} al_state_t;
+```
+
+#### 3.1.2 AL State Descriptions
+
+**Init State (0x01)**:
+- Initial state after power-on or reset
+- Slave initializes communication interfaces
+- No mailbox or process data communication
+- Slave reads EEPROM configuration
+
+**Pre-Operational State (0x02)**:
+- Mailbox communication is enabled
+- Process data communication is disabled
+- Configuration and parameterization via mailbox
+- SDO access available (CoE)
+
+**Bootstrap State (0x03)**:
+- Special state for firmware updates
+- Only FoE (File over EtherCAT) mailbox protocol enabled
+- Used for uploading new firmware to slave
+
+**Safe-Operational State (0x04)**:
+- Mailbox communication enabled
+- Process data communication enabled (inputs only)
+- Outputs are in safe state (typically zero)
+- Used for testing and verification
+
+**Operational State (0x08)**:
+- Full operation mode
+- Mailbox and process data communication enabled
+- Outputs are active and controlled by master
+- Normal cyclic operation
+
+#### 3.1.3 AL State Transitions
+
+```c
+/**
+ * @brief AL state transition requests
+ */
+typedef enum {
+    AL_TRANS_INIT_TO_PREOP,         /**< Init -> Pre-Op */
+    AL_TRANS_PREOP_TO_INIT,         /**< Pre-Op -> Init */
+    AL_TRANS_PREOP_TO_SAFEOP,       /**< Pre-Op -> Safe-Op */
+    AL_TRANS_SAFEOP_TO_PREOP,       /**< Safe-Op -> Pre-Op */
+    AL_TRANS_SAFEOP_TO_OP,          /**< Safe-Op -> Op */
+    AL_TRANS_OP_TO_SAFEOP,          /**< Op -> Safe-Op */
+    AL_TRANS_PREOP_TO_BOOT,         /**< Pre-Op -> Bootstrap */
+    AL_TRANS_BOOT_TO_INIT           /**< Bootstrap -> Init */
+} al_state_transition_t;
+```
+
+#### 3.1.4 AL State Machine Diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> Init: Power-on/Reset
+
+    Init --> PreOp: Mailbox ready
+    PreOp --> Init: Reset request
+
+    PreOp --> Bootstrap: FW update needed
+    Bootstrap --> Init: Update complete
+
+    PreOp --> SafeOp: SM configured
+    SafeOp --> PreOp: Disable outputs
+
+    SafeOp --> Op: Enable outputs
+    Op --> SafeOp: Disable outputs
+
+    Init --> [*]: Shutdown
+
+    note right of Init
+        - Initialize hardware
+        - Read EEPROM
+        - No communication
+    end note
+
+    note right of PreOp
+        - Mailbox enabled
+        - Configuration via CoE
+        - No process data
+    end note
+
+    note right of SafeOp
+        - Inputs active
+        - Outputs safe
+        - Testing mode
+    end note
+
+    note right of Op
+        - Full operation
+        - Cyclic I/O
+        - Normal mode
+    end note
+```
+
+### 3.2 AL Control and Status Registers
+
+#### 3.2.1 AL Control Register (0x0120)
+
+```c
+/**
+ * @brief AL Control register structure (Master -> Slave)
+ */
+typedef struct __attribute__((packed)) {
+    uint16_t state : 4;             /**< Requested state (bits 0-3) */
+    uint16_t ack : 1;               /**< Acknowledge error (bit 4) */
+    uint16_t request_id : 1;        /**< Request ID toggle (bit 5) */
+    uint16_t reserved : 10;         /**< Reserved (bits 6-15) */
+} al_control_t;
+
+#define AL_CONTROL_REG_ADDR 0x0120
+```
+
+#### 3.2.2 AL Status Register (0x0130)
+
+```c
+/**
+ * @brief AL Status register structure (Slave -> Master)
+ */
+typedef struct __attribute__((packed)) {
+    uint16_t state : 4;             /**< Current state (bits 0-3) */
+    uint16_t error : 1;             /**< Error flag (bit 4) */
+    uint16_t id : 1;                /**< ID toggle (bit 5) */
+    uint16_t reserved : 10;         /**< Reserved (bits 6-15) */
+} al_status_t;
+
+#define AL_STATUS_REG_ADDR 0x0130
+```
+
+#### 3.2.3 AL Status Code Register (0x0134)
+
+```c
+/**
+ * @brief AL Status Code register (error codes)
+ */
+typedef enum {
+    AL_STATUS_CODE_NO_ERROR = 0x0000,
+    AL_STATUS_CODE_UNSPECIFIED = 0x0001,
+    AL_STATUS_CODE_NO_MEMORY = 0x0002,
+    AL_STATUS_CODE_INVALID_DEVICE_SETUP = 0x0003,
+    AL_STATUS_CODE_INVALID_MAILBOX_CONFIG = 0x0004,
+    AL_STATUS_CODE_INVALID_MAILBOX_CONFIG_PREOP = 0x0005,
+    AL_STATUS_CODE_INVALID_SM_CONFIG = 0x0006,
+    AL_STATUS_CODE_INVALID_SM_CONFIG_PREOP = 0x0007,
+    AL_STATUS_CODE_INVALID_OUTPUT_CONFIG = 0x0008,
+    AL_STATUS_CODE_INVALID_INPUT_CONFIG = 0x0009,
+    AL_STATUS_CODE_INVALID_WATCHDOG_CONFIG = 0x000A,
+    AL_STATUS_CODE_SLAVE_NEEDS_COLD_START = 0x000B,
+    AL_STATUS_CODE_SLAVE_NEEDS_INIT = 0x000C,
+    AL_STATUS_CODE_SLAVE_NEEDS_PREOP = 0x000D,
+    AL_STATUS_CODE_SLAVE_NEEDS_SAFEOP = 0x000E,
+    AL_STATUS_CODE_INVALID_INPUT_MAPPING = 0x000F,
+    AL_STATUS_CODE_INVALID_OUTPUT_MAPPING = 0x0010,
+    AL_STATUS_CODE_INCONSISTENT_SETTINGS = 0x0011,
+    AL_STATUS_CODE_FREERUN_NOT_SUPPORTED = 0x0012,
+    AL_STATUS_CODE_SYNC_NOT_SUPPORTED = 0x0013,
+    AL_STATUS_CODE_FREERUN_NEEDS_3BUFFER = 0x0014,
+    AL_STATUS_CODE_BACKGROUND_WATCHDOG = 0x0015,
+    AL_STATUS_CODE_NO_VALID_INPUTS = 0x0016,
+    AL_STATUS_CODE_NO_VALID_OUTPUTS = 0x0017,
+    AL_STATUS_CODE_SYNC_ERROR = 0x0018,
+    AL_STATUS_CODE_SYNC_WATCHDOG = 0x0019,
+    AL_STATUS_CODE_INVALID_SYNC_TYPES = 0x001A,
+    AL_STATUS_CODE_INVALID_OUTPUT_CONFIG_SAFEOP = 0x001B,
+    AL_STATUS_CODE_INVALID_INPUT_CONFIG_SAFEOP = 0x001C,
+    AL_STATUS_CODE_INVALID_WATCHDOG_CONFIG_SAFEOP = 0x001D,
+    AL_STATUS_CODE_SLAVE_NEEDS_BOOT = 0x001E
+} al_status_code_t;
+
+#define AL_STATUS_CODE_REG_ADDR 0x0134
+```
+
+### 3.3 Sync Manager (SM)
+
+Sync Managers are hardware units in the slave that manage data transfer between master and slave memory.
+
+#### 3.3.1 Sync Manager Types
+
+```c
+/**
+ * @brief Sync Manager types
+ */
+typedef enum {
+    SM_TYPE_MAILBOX_WRITE = 0,      /**< Mailbox write (Master -> Slave) */
+    SM_TYPE_MAILBOX_READ = 1,       /**< Mailbox read (Slave -> Master) */
+    SM_TYPE_PROCESS_DATA_WRITE = 2, /**< Process data outputs (Master -> Slave) */
+    SM_TYPE_PROCESS_DATA_READ = 3   /**< Process data inputs (Slave -> Master) */
+} sm_type_t;
+```
+
+#### 3.3.2 Sync Manager Configuration
+
+```c
+/**
+ * @brief Sync Manager configuration structure
+ */
+typedef struct __attribute__((packed)) {
+    uint16_t physical_start_address; /**< Physical start address */
+    uint16_t length;                 /**< Length in bytes */
+    uint8_t control;                 /**< Control register */
+    uint8_t status;                  /**< Status register */
+    uint8_t enable;                  /**< Enable register */
+    uint8_t pdi_control;             /**< PDI control register */
+} sm_config_t;
+
+#define SM_CONFIG_BASE_ADDR 0x0800
+#define SM_CONFIG_SIZE 8
+#define SM_MAX_COUNT 16
+```
+
+#### 3.3.3 Sync Manager Control Register
+
+```c
+/**
+ * @brief SM Control register bits
+ */
+typedef struct {
+    uint8_t operation_mode : 2;     /**< Operation mode (bits 0-1) */
+    uint8_t direction : 1;          /**< Direction: 0=read, 1=write (bit 2) */
+    uint8_t ecat_event : 1;         /**< EtherCAT event enable (bit 3) */
+    uint8_t dls_user_event : 1;     /**< DLS user event enable (bit 4) */
+    uint8_t reserved : 1;           /**< Reserved (bit 5) */
+    uint8_t watchdog : 1;           /**< Watchdog trigger (bit 6) */
+    uint8_t reserved2 : 1;          /**< Reserved (bit 7) */
+} sm_control_bits_t;
+
+/**
+ * @brief SM operation modes
+ */
+typedef enum {
+    SM_OP_MODE_3BUFFER = 0x00,      /**< 3-buffer mode */
+    SM_OP_MODE_1BUFFER = 0x02       /**< 1-buffer mode (mailbox) */
+} sm_operation_mode_t;
+```
+
+### 3.4 Mailbox Protocol
+
+The mailbox provides a channel for acyclic communication between master and slave.
+
+#### 3.4.1 Mailbox Header
+
+```c
+/**
+ * @brief Mailbox header structure
+ */
+typedef struct __attribute__((packed)) {
+    uint16_t length;                /**< Data length (bits 0-15) */
+    uint16_t address;               /**< Slave address */
+    uint8_t channel : 6;            /**< Channel (bits 0-5) */
+    uint8_t priority : 2;           /**< Priority (bits 6-7) */
+    uint8_t type;                   /**< Mailbox protocol type */
+    uint8_t data[];                 /**< Mailbox data */
+} mailbox_header_t;
+
+#define MAILBOX_HEADER_SIZE 6
+```
+
+#### 3.4.2 Mailbox Protocol Types
+
+```c
+/**
+ * @brief Mailbox protocol types
+ */
+typedef enum {
+    MBOX_TYPE_ERROR = 0x00,         /**< Error response */
+    MBOX_TYPE_AOE = 0x01,           /**< ADS over EtherCAT */
+    MBOX_TYPE_EOE = 0x02,           /**< Ethernet over EtherCAT */
+    MBOX_TYPE_COE = 0x03,           /**< CANopen over EtherCAT */
+    MBOX_TYPE_FOE = 0x04,           /**< File over EtherCAT */
+    MBOX_TYPE_SOE = 0x05,           /**< Servo over EtherCAT */
+    MBOX_TYPE_VOE = 0x0F            /**< Vendor specific over EtherCAT */
+} mailbox_type_t;
+```
+
+#### 3.4.3 Mailbox State Machine
+
+```c
+/**
+ * @brief Mailbox states
+ */
+typedef enum {
+    MBOX_STATE_IDLE,                /**< Idle, ready for new request */
+    MBOX_STATE_WRITE_REQUESTED,     /**< Write request pending */
+    MBOX_STATE_WRITE_IN_PROGRESS,   /**< Writing to slave */
+    MBOX_STATE_READ_REQUESTED,      /**< Read request pending */
+    MBOX_STATE_READ_IN_PROGRESS,    /**< Reading from slave */
+    MBOX_STATE_ERROR                /**< Error state */
+} mailbox_state_t;
+```
+
+### 3.5 AL Service Primitives
+
+#### 3.5.1 AL State Change Service
+
+```c
+/**
+ * @brief AL_Control.req - Request state change
+ */
+typedef struct {
+    uint16_t slave_address;         /**< Slave station address */
+    al_state_t requested_state;     /**< Requested AL state */
+    uint32_t timeout_ms;            /**< Timeout in milliseconds */
+    void* user_data;                /**< User context */
+} al_control_req_t;
+
+/**
+ * @brief AL_Control.con - State change confirmation
+ */
+typedef struct {
+    uint16_t slave_address;         /**< Slave station address */
+    al_state_t current_state;       /**< Current AL state */
+    al_status_code_t status_code;   /**< Status code (0 = success) */
+    void* user_data;                /**< User context */
+} al_control_con_t;
+
+/**
+ * @brief AL_Control.ind - State change indication
+ */
+typedef struct {
+    uint16_t slave_address;         /**< Slave station address */
+    al_state_t old_state;           /**< Previous AL state */
+    al_state_t new_state;           /**< New AL state */
+    al_status_code_t status_code;   /**< Status code */
+} al_control_ind_t;
+```
+
+#### 3.5.2 Mailbox Service Primitives
+
+```c
+/**
+ * @brief MBX_Send.req - Send mailbox message
+ */
+typedef struct {
+    uint16_t slave_address;         /**< Slave station address */
+    mailbox_type_t type;            /**< Mailbox protocol type */
+    uint8_t* data;                  /**< Message data */
+    uint16_t length;                /**< Data length */
+    uint8_t priority;               /**< Priority (0-3) */
+    void* user_data;                /**< User context */
+} mbx_send_req_t;
+
+/**
+ * @brief MBX_Send.con - Mailbox send confirmation
+ */
+typedef struct {
+    uint16_t slave_address;         /**< Slave station address */
+    uint8_t status;                 /**< Send status */
+    void* user_data;                /**< User context */
+} mbx_send_con_t;
+
+/**
+ * @brief MBX_Receive.ind - Mailbox receive indication
+ */
+typedef struct {
+    uint16_t slave_address;         /**< Slave station address */
+    mailbox_type_t type;            /**< Mailbox protocol type */
+    uint8_t* data;                  /**< Received data */
+    uint16_t length;                /**< Data length */
+} mbx_receive_ind_t;
+```
+
+### 3.6 AL Service Interface Functions
+
+#### 3.6.1 Initialization and Configuration
+
+```c
+/**
+ * @brief AL status codes
+ */
+typedef enum {
+    AL_STATUS_SUCCESS = 0x00,
+    AL_STATUS_ERROR = 0x01,
+    AL_STATUS_BUSY = 0x02,
+    AL_STATUS_TIMEOUT = 0x03,
+    AL_STATUS_INVALID_PARAM = 0x04,
+    AL_STATUS_INVALID_STATE = 0x05,
+    AL_STATUS_NOT_INITIALIZED = 0x06
+} al_status_t;
+
+/**
+ * @brief Initialize Application Layer
+ *
+ * @param config Pointer to AL configuration
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_init(const al_config_t* config);
+
+/**
+ * @brief Shutdown Application Layer
+ *
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_shutdown(void);
+```
+
+#### 3.6.2 State Control Functions
+
+```c
+/**
+ * @brief Request AL state change for a slave
+ *
+ * @param slave_address Slave station address
+ * @param requested_state Requested AL state
+ * @param timeout_ms Timeout in milliseconds
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_request_state(uint16_t slave_address,
+                              al_state_t requested_state,
+                              uint32_t timeout_ms);
+
+/**
+ * @brief Get current AL state of a slave
+ *
+ * @param slave_address Slave station address
+ * @param state Pointer to receive current state
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_get_state(uint16_t slave_address, al_state_t* state);
+
+/**
+ * @brief Get AL status code of a slave
+ *
+ * @param slave_address Slave station address
+ * @param status_code Pointer to receive status code
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_get_status_code(uint16_t slave_address,
+                                al_status_code_t* status_code);
+
+/**
+ * @brief Read AL Control register
+ *
+ * @param slave_address Slave station address
+ * @param control Pointer to receive control register value
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_read_control(uint16_t slave_address, al_control_t* control);
+
+/**
+ * @brief Write AL Control register
+ *
+ * @param slave_address Slave station address
+ * @param control Pointer to control register value
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_write_control(uint16_t slave_address, const al_control_t* control);
+
+/**
+ * @brief Read AL Status register
+ *
+ * @param slave_address Slave station address
+ * @param status Pointer to receive status register value
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_read_status(uint16_t slave_address, al_status_t* status);
+```
+
+#### 3.6.3 Mailbox Functions
+
+```c
+/**
+ * @brief Send mailbox message to slave
+ *
+ * @param req Pointer to mailbox send request
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_mailbox_send(const mbx_send_req_t* req);
+
+/**
+ * @brief Check if mailbox message is available
+ *
+ * @param slave_address Slave station address
+ * @param available Pointer to receive availability flag
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_mailbox_check(uint16_t slave_address, bool* available);
+
+/**
+ * @brief Receive mailbox message from slave
+ *
+ * @param slave_address Slave station address
+ * @param type Pointer to receive mailbox type
+ * @param data Buffer for received data
+ * @param length Pointer to buffer length (in: max, out: actual)
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_mailbox_receive(uint16_t slave_address,
+                                mailbox_type_t* type,
+                                uint8_t* data,
+                                uint16_t* length);
+```
+
+#### 3.6.4 Sync Manager Functions
+
+```c
+/**
+ * @brief Configure Sync Manager
+ *
+ * @param slave_address Slave station address
+ * @param sm_index Sync Manager index (0-15)
+ * @param config Pointer to SM configuration
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_sm_config(uint16_t slave_address,
+                          uint8_t sm_index,
+                          const sm_config_t* config);
+
+/**
+ * @brief Read Sync Manager configuration
+ *
+ * @param slave_address Slave station address
+ * @param sm_index Sync Manager index (0-15)
+ * @param config Pointer to receive SM configuration
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_sm_read_config(uint16_t slave_address,
+                               uint8_t sm_index,
+                               sm_config_t* config);
+
+/**
+ * @brief Enable Sync Manager
+ *
+ * @param slave_address Slave station address
+ * @param sm_index Sync Manager index (0-15)
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_sm_enable(uint16_t slave_address, uint8_t sm_index);
+
+/**
+ * @brief Disable Sync Manager
+ *
+ * @param slave_address Slave station address
+ * @param sm_index Sync Manager index (0-15)
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_sm_disable(uint16_t slave_address, uint8_t sm_index);
+```
+
+### 3.7 AL Configuration Structure
+
+```c
+/**
+ * @brief Application Layer configuration
+ */
+typedef struct {
+    uint32_t state_transition_timeout_ms;  /**< State transition timeout */
+    uint32_t mailbox_timeout_ms;           /**< Mailbox operation timeout */
+    uint16_t max_slaves;                   /**< Maximum number of slaves */
+    bool enable_distributed_clocks;        /**< Enable DC support */
+    void* user_data;                       /**< User context */
+} al_config_t;
+```
+
+### 3.8 AL Callback Functions
+
+```c
+/**
+ * @brief State change indication callback
+ *
+ * @param ind Pointer to state change indication
+ */
+typedef void (*al_state_change_cb_t)(const al_control_ind_t* ind);
+
+/**
+ * @brief Mailbox receive indication callback
+ *
+ * @param ind Pointer to mailbox receive indication
+ */
+typedef void (*al_mailbox_receive_cb_t)(const mbx_receive_ind_t* ind);
+
+/**
+ * @brief AL error callback
+ *
+ * @param slave_address Slave station address
+ * @param error_code AL status code
+ * @param context Error context string
+ */
+typedef void (*al_error_cb_t)(uint16_t slave_address,
+                               al_status_code_t error_code,
+                               const char* context);
+
+/**
+ * @brief Register AL callbacks
+ *
+ * @param state_change_cb State change callback
+ * @param mailbox_receive_cb Mailbox receive callback
+ * @param error_cb Error callback
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_register_callbacks(al_state_change_cb_t state_change_cb,
+                                   al_mailbox_receive_cb_t mailbox_receive_cb,
+                                   al_error_cb_t error_cb);
+```
+
+### 3.9 AL Timing Requirements
+
+Based on ETG1000_5 specification:
+
+```c
+/**
+ * @brief AL timing constraints
+ */
+#define AL_STATE_TRANSITION_TIMEOUT_MS  1000    /**< Default state transition timeout */
+#define AL_MAILBOX_TIMEOUT_MS           100     /**< Default mailbox timeout */
+#define AL_MAILBOX_POLL_INTERVAL_MS     1       /**< Mailbox polling interval */
+#define AL_STATUS_CHECK_INTERVAL_MS     10      /**< Status check interval */
+```
+
+### 3.10 Slave Information Interface (SII)
+
+The Slave Information Interface provides access to slave configuration stored in EEPROM.
+
+#### 3.10.1 SII Categories
+
+```c
+/**
+ * @brief SII category types
+ */
+typedef enum {
+    SII_CAT_NOP = 0,                /**< No operation */
+    SII_CAT_STRINGS = 10,           /**< Strings */
+    SII_CAT_DATATYPES = 20,         /**< Data types */
+    SII_CAT_GENERAL = 30,           /**< General information */
+    SII_CAT_FMMU = 40,              /**< FMMU configuration */
+    SII_CAT_SYNC_MANAGER = 41,      /**< Sync Manager configuration */
+    SII_CAT_TXPDO = 50,             /**< TxPDO (inputs) */
+    SII_CAT_RXPDO = 51,             /**< RxPDO (outputs) */
+    SII_CAT_DC = 60                 /**< Distributed Clocks */
+} sii_category_t;
+```
+
+#### 3.10.2 SII Access Functions
+
+```c
+/**
+ * @brief Read SII (EEPROM) data
+ *
+ * @param slave_address Slave station address
+ * @param offset EEPROM word offset
+ * @param data Buffer for read data
+ * @param length Number of words to read
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_sii_read(uint16_t slave_address,
+                         uint16_t offset,
+                         uint16_t* data,
+                         uint16_t length);
+
+/**
+ * @brief Write SII (EEPROM) data
+ *
+ * @param slave_address Slave station address
+ * @param offset EEPROM word offset
+ * @param data Data to write
+ * @param length Number of words to write
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t al_sii_write(uint16_t slave_address,
+                          uint16_t offset,
+                          const uint16_t* data,
+                          uint16_t length);
+```
 
 ---
 
 ## Application Layer Protocol
 
-*To be defined based on ETG1000_6*
+Based on ETG1000_6 specification, the Application Layer Protocol defines mailbox-based protocols for configuration, diagnostics, and file transfer.
+
+### 4.1 CANopen over EtherCAT (CoE)
+
+CoE provides access to the CANopen Object Dictionary for device configuration and parameterization.
+
+#### 4.1.1 CoE Service Types
+
+```c
+/**
+ * @brief CoE service types
+ */
+typedef enum {
+    COE_SERVICE_SDO_REQUEST = 0x02,     /**< SDO request */
+    COE_SERVICE_SDO_RESPONSE = 0x03,    /**< SDO response */
+    COE_SERVICE_TXPDO = 0x04,           /**< TxPDO (slave to master) */
+    COE_SERVICE_RXPDO = 0x05,           /**< RxPDO (master to slave) */
+    COE_SERVICE_TXPDO_REMOTE = 0x06,    /**< TxPDO remote request */
+    COE_SERVICE_RXPDO_REMOTE = 0x07,    /**< RxPDO remote request */
+    COE_SERVICE_SDO_INFO = 0x08         /**< SDO information */
+} coe_service_t;
+```
+
+#### 4.1.2 CoE Header
+
+```c
+/**
+ * @brief CoE header structure
+ */
+typedef struct __attribute__((packed)) {
+    uint16_t number : 9;                /**< SDO number (bits 0-8) */
+    uint16_t reserved : 3;              /**< Reserved (bits 9-11) */
+    uint16_t service : 4;               /**< CoE service type (bits 12-15) */
+} coe_header_t;
+
+#define COE_HEADER_SIZE 2
+```
+
+#### 4.1.3 SDO (Service Data Object)
+
+**SDO Command Specifiers:**
+
+```c
+/**
+ * @brief SDO command specifiers
+ */
+typedef enum {
+    SDO_CMD_DOWNLOAD_SEGMENT = 0x00,    /**< Download segment */
+    SDO_CMD_DOWNLOAD_INIT = 0x01,       /**< Initiate download */
+    SDO_CMD_UPLOAD_INIT = 0x02,         /**< Initiate upload */
+    SDO_CMD_UPLOAD_SEGMENT = 0x03,      /**< Upload segment */
+    SDO_CMD_ABORT = 0x04                /**< Abort transfer */
+} sdo_command_t;
+```
+
+**SDO Download (Write to Object Dictionary):**
+
+```c
+/**
+ * @brief SDO Download request structure
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t command;                    /**< Command specifier */
+    uint16_t index;                     /**< Object Dictionary index */
+    uint8_t subindex;                   /**< Object Dictionary subindex */
+    uint32_t complete_size;             /**< Complete data size (expedited: data) */
+    uint8_t data[];                     /**< Data (for normal transfer) */
+} sdo_download_req_t;
+
+/**
+ * @brief SDO Download response structure
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t command;                    /**< Command specifier */
+    uint16_t index;                     /**< Object Dictionary index */
+    uint8_t subindex;                   /**< Object Dictionary subindex */
+} sdo_download_res_t;
+```
+
+**SDO Upload (Read from Object Dictionary):**
+
+```c
+/**
+ * @brief SDO Upload request structure
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t command;                    /**< Command specifier */
+    uint16_t index;                     /**< Object Dictionary index */
+    uint8_t subindex;                   /**< Object Dictionary subindex */
+    uint32_t complete_access;           /**< Complete access flag */
+} sdo_upload_req_t;
+
+/**
+ * @brief SDO Upload response structure
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t command;                    /**< Command specifier */
+    uint16_t index;                     /**< Object Dictionary index */
+    uint8_t subindex;                   /**< Object Dictionary subindex */
+    uint32_t complete_size;             /**< Complete data size (expedited: data) */
+    uint8_t data[];                     /**< Data (for normal transfer) */
+} sdo_upload_res_t;
+```
+
+**SDO Command Byte Format:**
+
+```c
+/**
+ * @brief SDO command byte structure
+ */
+typedef struct {
+    uint8_t ccs : 3;                    /**< Client command specifier (bits 0-2) */
+    uint8_t reserved : 1;               /**< Reserved (bit 3) */
+    uint8_t n : 2;                      /**< Number of bytes (bits 4-5) */
+    uint8_t e : 1;                      /**< Expedited transfer (bit 6) */
+    uint8_t s : 1;                      /**< Size indicator (bit 7) */
+} sdo_command_byte_t;
+```
+
+#### 4.1.4 SDO Abort Codes
+
+```c
+/**
+ * @brief SDO abort codes
+ */
+typedef enum {
+    SDO_ABORT_TOGGLE_BIT = 0x05030000,
+    SDO_ABORT_TIMEOUT = 0x05040000,
+    SDO_ABORT_INVALID_COMMAND = 0x05040001,
+    SDO_ABORT_INVALID_BLOCK_SIZE = 0x05040002,
+    SDO_ABORT_INVALID_SEQUENCE = 0x05040003,
+    SDO_ABORT_CRC_ERROR = 0x05040004,
+    SDO_ABORT_OUT_OF_MEMORY = 0x05040005,
+    SDO_ABORT_UNSUPPORTED_ACCESS = 0x06010000,
+    SDO_ABORT_WRITE_ONLY = 0x06010001,
+    SDO_ABORT_READ_ONLY = 0x06010002,
+    SDO_ABORT_OBJECT_NOT_EXIST = 0x06020000,
+    SDO_ABORT_OBJECT_CANNOT_MAP = 0x06040041,
+    SDO_ABORT_PDO_LENGTH_EXCEEDED = 0x06040042,
+    SDO_ABORT_PARAMETER_INCOMPATIBLE = 0x06040043,
+    SDO_ABORT_INTERNAL_INCOMPATIBILITY = 0x06040047,
+    SDO_ABORT_HARDWARE_ERROR = 0x06060000,
+    SDO_ABORT_DATA_TYPE_MISMATCH = 0x06070010,
+    SDO_ABORT_DATA_TYPE_LENGTH_HIGH = 0x06070012,
+    SDO_ABORT_DATA_TYPE_LENGTH_LOW = 0x06070013,
+    SDO_ABORT_SUBINDEX_NOT_EXIST = 0x06090011,
+    SDO_ABORT_VALUE_RANGE_EXCEEDED = 0x06090030,
+    SDO_ABORT_VALUE_TOO_HIGH = 0x06090031,
+    SDO_ABORT_VALUE_TOO_LOW = 0x06090032,
+    SDO_ABORT_MAX_LESS_MIN = 0x06090036,
+    SDO_ABORT_GENERAL_ERROR = 0x08000000,
+    SDO_ABORT_DATA_CANNOT_TRANSFER = 0x08000020,
+    SDO_ABORT_DATA_CANNOT_TRANSFER_LOCAL = 0x08000021,
+    SDO_ABORT_DATA_CANNOT_TRANSFER_STATE = 0x08000022,
+    SDO_ABORT_NO_OBJECT_DICTIONARY = 0x08000023,
+    SDO_ABORT_NO_DATA_AVAILABLE = 0x08000024
+} sdo_abort_code_t;
+```
+
+#### 4.1.5 CoE Service Functions
+
+```c
+/**
+ * @brief CoE status codes
+ */
+typedef enum {
+    COE_STATUS_SUCCESS = 0x00,
+    COE_STATUS_ERROR = 0x01,
+    COE_STATUS_TIMEOUT = 0x02,
+    COE_STATUS_ABORT = 0x03,
+    COE_STATUS_INVALID_PARAM = 0x04
+} coe_status_t;
+
+/**
+ * @brief SDO Download (write to object dictionary)
+ *
+ * @param slave_address Slave station address
+ * @param index Object dictionary index
+ * @param subindex Object dictionary subindex
+ * @param data Data to write
+ * @param size Data size in bytes
+ * @param timeout_ms Timeout in milliseconds
+ * @return COE_STATUS_SUCCESS on success, error code otherwise
+ */
+coe_status_t coe_sdo_download(uint16_t slave_address,
+                               uint16_t index,
+                               uint8_t subindex,
+                               const uint8_t* data,
+                               uint32_t size,
+                               uint32_t timeout_ms);
+
+/**
+ * @brief SDO Upload (read from object dictionary)
+ *
+ * @param slave_address Slave station address
+ * @param index Object dictionary index
+ * @param subindex Object dictionary subindex
+ * @param data Buffer for read data
+ * @param size Pointer to buffer size (in: max, out: actual)
+ * @param timeout_ms Timeout in milliseconds
+ * @return COE_STATUS_SUCCESS on success, error code otherwise
+ */
+coe_status_t coe_sdo_upload(uint16_t slave_address,
+                             uint16_t index,
+                             uint8_t subindex,
+                             uint8_t* data,
+                             uint32_t* size,
+                             uint32_t timeout_ms);
+
+/**
+ * @brief SDO Download expedited (1-4 bytes)
+ *
+ * @param slave_address Slave station address
+ * @param index Object dictionary index
+ * @param subindex Object dictionary subindex
+ * @param value Value to write (up to 4 bytes)
+ * @param size Value size (1-4 bytes)
+ * @param timeout_ms Timeout in milliseconds
+ * @return COE_STATUS_SUCCESS on success, error code otherwise
+ */
+coe_status_t coe_sdo_download_expedited(uint16_t slave_address,
+                                         uint16_t index,
+                                         uint8_t subindex,
+                                         uint32_t value,
+                                         uint8_t size,
+                                         uint32_t timeout_ms);
+
+/**
+ * @brief SDO Upload expedited (1-4 bytes)
+ *
+ * @param slave_address Slave station address
+ * @param index Object dictionary index
+ * @param subindex Object dictionary subindex
+ * @param value Pointer to receive value
+ * @param size Pointer to receive size
+ * @param timeout_ms Timeout in milliseconds
+ * @return COE_STATUS_SUCCESS on success, error code otherwise
+ */
+coe_status_t coe_sdo_upload_expedited(uint16_t slave_address,
+                                       uint16_t index,
+                                       uint8_t subindex,
+                                       uint32_t* value,
+                                       uint8_t* size,
+                                       uint32_t timeout_ms);
+```
+
+#### 4.1.6 Object Dictionary Standard Indices
+
+```c
+/**
+ * @brief Standard CANopen object dictionary indices
+ */
+#define OD_DEVICE_TYPE              0x1000  /**< Device type */
+#define OD_ERROR_REGISTER           0x1001  /**< Error register */
+#define OD_MANUFACTURER_STATUS      0x1002  /**< Manufacturer status */
+#define OD_IDENTITY_OBJECT          0x1018  /**< Identity object */
+#define OD_SYNC_MANAGER_TYPE        0x1C00  /**< Sync manager type */
+#define OD_RXPDO_MAPPING            0x1600  /**< RxPDO mapping (outputs) */
+#define OD_TXPDO_MAPPING            0x1A00  /**< TxPDO mapping (inputs) */
+#define OD_RXPDO_ASSIGN             0x1C12  /**< RxPDO assignment */
+#define OD_TXPDO_ASSIGN             0x1C13  /**< TxPDO assignment */
+
+/**
+ * @brief Identity object subindices
+ */
+#define OD_IDENTITY_VENDOR_ID       0x01    /**< Vendor ID */
+#define OD_IDENTITY_PRODUCT_CODE    0x02    /**< Product code */
+#define OD_IDENTITY_REVISION        0x03    /**< Revision number */
+#define OD_IDENTITY_SERIAL_NUMBER   0x04    /**< Serial number */
+```
+
+### 4.2 File over EtherCAT (FoE)
+
+FoE provides file transfer capabilities for firmware updates and data exchange.
+
+#### 4.2.1 FoE OpCodes
+
+```c
+/**
+ * @brief FoE operation codes
+ */
+typedef enum {
+    FOE_OPCODE_READ = 0x01,             /**< Read file */
+    FOE_OPCODE_WRITE = 0x02,            /**< Write file */
+    FOE_OPCODE_DATA = 0x03,             /**< Data packet */
+    FOE_OPCODE_ACK = 0x04,              /**< Acknowledge */
+    FOE_OPCODE_ERROR = 0x05,            /**< Error */
+    FOE_OPCODE_BUSY = 0x06              /**< Busy */
+} foe_opcode_t;
+```
+
+#### 4.2.2 FoE Header
+
+```c
+/**
+ * @brief FoE header structure
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t opcode;                     /**< FoE operation code */
+    uint8_t reserved;                   /**< Reserved */
+    uint32_t packet_number;             /**< Packet number (for DATA/ACK) */
+    uint32_t error_code;                /**< Error code (for ERROR) */
+    uint8_t data[];                     /**< Data or filename */
+} foe_header_t;
+
+#define FOE_HEADER_SIZE 6
+```
+
+#### 4.2.3 FoE Error Codes
+
+```c
+/**
+ * @brief FoE error codes
+ */
+typedef enum {
+    FOE_ERROR_NOT_DEFINED = 0x8000,
+    FOE_ERROR_NOT_FOUND = 0x8001,
+    FOE_ERROR_ACCESS_DENIED = 0x8002,
+    FOE_ERROR_DISK_FULL = 0x8003,
+    FOE_ERROR_ILLEGAL = 0x8004,
+    FOE_ERROR_PACKET_NUMBER = 0x8005,
+    FOE_ERROR_ALREADY_EXISTS = 0x8006,
+    FOE_ERROR_NO_USER = 0x8007,
+    FOE_ERROR_BOOTSTRAP_ONLY = 0x8008,
+    FOE_ERROR_NOT_BOOTSTRAP = 0x8009,
+    FOE_ERROR_NO_RIGHTS = 0x800A,
+    FOE_ERROR_PROGRAM_ERROR = 0x800B
+} foe_error_code_t;
+```
+
+#### 4.2.4 FoE Service Functions
+
+```c
+/**
+ * @brief FoE status codes
+ */
+typedef enum {
+    FOE_STATUS_SUCCESS = 0x00,
+    FOE_STATUS_ERROR = 0x01,
+    FOE_STATUS_TIMEOUT = 0x02,
+    FOE_STATUS_BUSY = 0x03,
+    FOE_STATUS_INVALID_PARAM = 0x04
+} foe_status_t;
+
+/**
+ * @brief FoE Read file from slave
+ *
+ * @param slave_address Slave station address
+ * @param filename Filename to read
+ * @param data Buffer for file data
+ * @param size Pointer to buffer size (in: max, out: actual)
+ * @param timeout_ms Timeout in milliseconds
+ * @return FOE_STATUS_SUCCESS on success, error code otherwise
+ */
+foe_status_t foe_read(uint16_t slave_address,
+                      const char* filename,
+                      uint8_t* data,
+                      uint32_t* size,
+                      uint32_t timeout_ms);
+
+/**
+ * @brief FoE Write file to slave
+ *
+ * @param slave_address Slave station address
+ * @param filename Filename to write
+ * @param data File data
+ * @param size File size in bytes
+ * @param timeout_ms Timeout in milliseconds
+ * @return FOE_STATUS_SUCCESS on success, error code otherwise
+ */
+foe_status_t foe_write(uint16_t slave_address,
+                       const char* filename,
+                       const uint8_t* data,
+                       uint32_t size,
+                       uint32_t timeout_ms);
+
+/**
+ * @brief FoE firmware update
+ *
+ * @param slave_address Slave station address
+ * @param firmware_data Firmware binary data
+ * @param firmware_size Firmware size in bytes
+ * @param progress_callback Progress callback function (optional)
+ * @param timeout_ms Timeout in milliseconds
+ * @return FOE_STATUS_SUCCESS on success, error code otherwise
+ */
+foe_status_t foe_firmware_update(uint16_t slave_address,
+                                  const uint8_t* firmware_data,
+                                  uint32_t firmware_size,
+                                  void (*progress_callback)(uint32_t bytes_sent, uint32_t total_bytes),
+                                  uint32_t timeout_ms);
+```
+
+### 4.3 Servo over EtherCAT (SoE)
+
+SoE provides access to servo drive parameters using IDN (Identification Numbers).
+
+#### 4.3.1 SoE OpCodes
+
+```c
+/**
+ * @brief SoE operation codes
+ */
+typedef enum {
+    SOE_OPCODE_READ_REQUEST = 0x01,     /**< Read request */
+    SOE_OPCODE_READ_RESPONSE = 0x02,    /**< Read response */
+    SOE_OPCODE_WRITE_REQUEST = 0x03,    /**< Write request */
+    SOE_OPCODE_WRITE_RESPONSE = 0x04,   /**< Write response */
+    SOE_OPCODE_NOTIFICATION = 0x05,     /**< Notification */
+    SOE_OPCODE_EMERGENCY = 0x06         /**< Emergency */
+} soe_opcode_t;
+```
+
+#### 4.3.2 SoE Header
+
+```c
+/**
+ * @brief SoE header structure
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t opcode : 3;                 /**< Operation code (bits 0-2) */
+    uint8_t incomplete : 1;             /**< Incomplete flag (bit 3) */
+    uint8_t error : 1;                  /**< Error flag (bit 4) */
+    uint8_t drive_no : 3;               /**< Drive number (bits 5-7) */
+    uint8_t element_flags;              /**< Element flags */
+    uint16_t idn;                       /**< IDN (Identification Number) */
+    uint8_t data[];                     /**< Data */
+} soe_header_t;
+
+#define SOE_HEADER_SIZE 4
+```
+
+#### 4.3.3 SoE IDN Structure
+
+```c
+/**
+ * @brief SoE IDN (Identification Number) structure
+ */
+typedef struct {
+    uint16_t parameter : 12;            /**< Parameter number (bits 0-11) */
+    uint16_t set : 3;                   /**< Parameter set (bits 12-14) */
+    uint16_t type : 1;                  /**< Type: 0=standard, 1=product (bit 15) */
+} soe_idn_t;
+
+/**
+ * @brief Build SoE IDN
+ *
+ * @param type Type (0=standard, 1=product)
+ * @param set Parameter set (0-7)
+ * @param parameter Parameter number (0-4095)
+ * @return 16-bit IDN value
+ */
+static inline uint16_t soe_build_idn(uint8_t type, uint8_t set, uint16_t parameter)
+{
+    return (type << 15) | ((set & 0x07) << 12) | (parameter & 0x0FFF);
+}
+```
+
+#### 4.3.4 SoE Service Functions
+
+```c
+/**
+ * @brief SoE status codes
+ */
+typedef enum {
+    SOE_STATUS_SUCCESS = 0x00,
+    SOE_STATUS_ERROR = 0x01,
+    SOE_STATUS_TIMEOUT = 0x02,
+    SOE_STATUS_INVALID_PARAM = 0x04
+} soe_status_t;
+
+/**
+ * @brief SoE Read IDN
+ *
+ * @param slave_address Slave station address
+ * @param drive_no Drive number (0-7)
+ * @param idn IDN to read
+ * @param data Buffer for read data
+ * @param size Pointer to buffer size (in: max, out: actual)
+ * @param timeout_ms Timeout in milliseconds
+ * @return SOE_STATUS_SUCCESS on success, error code otherwise
+ */
+soe_status_t soe_read(uint16_t slave_address,
+                      uint8_t drive_no,
+                      uint16_t idn,
+                      uint8_t* data,
+                      uint32_t* size,
+                      uint32_t timeout_ms);
+
+/**
+ * @brief SoE Write IDN
+ *
+ * @param slave_address Slave station address
+ * @param drive_no Drive number (0-7)
+ * @param idn IDN to write
+ * @param data Data to write
+ * @param size Data size in bytes
+ * @param timeout_ms Timeout in milliseconds
+ * @return SOE_STATUS_SUCCESS on success, error code otherwise
+ */
+soe_status_t soe_write(uint16_t slave_address,
+                       uint8_t drive_no,
+                       uint16_t idn,
+                       const uint8_t* data,
+                       uint32_t size,
+                       uint32_t timeout_ms);
+```
+
+### 4.4 Vendor specific over EtherCAT (VoE)
+
+VoE allows vendor-specific protocols over EtherCAT mailbox.
+
+#### 4.4.1 VoE Header
+
+```c
+/**
+ * @brief VoE header structure
+ */
+typedef struct __attribute__((packed)) {
+    uint32_t vendor_id;                 /**< Vendor ID */
+    uint16_t vendor_type;               /**< Vendor-specific type */
+    uint8_t data[];                     /**< Vendor-specific data */
+} voe_header_t;
+
+#define VOE_HEADER_SIZE 6
+```
+
+#### 4.4.2 VoE Service Functions
+
+```c
+/**
+ * @brief VoE status codes
+ */
+typedef enum {
+    VOE_STATUS_SUCCESS = 0x00,
+    VOE_STATUS_ERROR = 0x01,
+    VOE_STATUS_TIMEOUT = 0x02,
+    VOE_STATUS_INVALID_PARAM = 0x04
+} voe_status_t;
+
+/**
+ * @brief VoE Send vendor-specific message
+ *
+ * @param slave_address Slave station address
+ * @param vendor_id Vendor ID
+ * @param vendor_type Vendor-specific type
+ * @param data Message data
+ * @param size Data size in bytes
+ * @param timeout_ms Timeout in milliseconds
+ * @return VOE_STATUS_SUCCESS on success, error code otherwise
+ */
+voe_status_t voe_send(uint16_t slave_address,
+                      uint32_t vendor_id,
+                      uint16_t vendor_type,
+                      const uint8_t* data,
+                      uint32_t size,
+                      uint32_t timeout_ms);
+
+/**
+ * @brief VoE Receive vendor-specific message
+ *
+ * @param slave_address Slave station address
+ * @param vendor_id Pointer to receive vendor ID
+ * @param vendor_type Pointer to receive vendor type
+ * @param data Buffer for message data
+ * @param size Pointer to buffer size (in: max, out: actual)
+ * @param timeout_ms Timeout in milliseconds
+ * @return VOE_STATUS_SUCCESS on success, error code otherwise
+ */
+voe_status_t voe_receive(uint16_t slave_address,
+                         uint32_t* vendor_id,
+                         uint16_t* vendor_type,
+                         uint8_t* data,
+                         uint32_t* size,
+                         uint32_t timeout_ms);
+```
+
+### 4.5 Ethernet over EtherCAT (EoE)
+
+EoE provides Ethernet tunneling over EtherCAT for IP-based communication.
+
+#### 4.5.1 EoE Header
+
+```c
+/**
+ * @brief EoE header structure
+ */
+typedef struct __attribute__((packed)) {
+    uint16_t frame_type : 4;            /**< Frame type (bits 0-3) */
+    uint16_t port : 4;                  /**< Port number (bits 4-7) */
+    uint16_t last_fragment : 1;         /**< Last fragment (bit 8) */
+    uint16_t time_append : 1;           /**< Time append (bit 9) */
+    uint16_t time_request : 1;          /**< Time request (bit 10) */
+    uint16_t reserved : 5;              /**< Reserved (bits 11-15) */
+    uint16_t fragment_number : 6;       /**< Fragment number (bits 0-5) */
+    uint16_t frame_offset : 6;          /**< Frame offset (bits 6-11) */
+    uint16_t frame_number : 4;          /**< Frame number (bits 12-15) */
+    uint8_t data[];                     /**< Ethernet frame data */
+} eoe_header_t;
+
+#define EOE_HEADER_SIZE 4
+
+/**
+ * @brief EoE frame types
+ */
+typedef enum {
+    EOE_FRAME_TYPE_FRAGMENT = 0x00,     /**< Fragment of Ethernet frame */
+    EOE_FRAME_TYPE_INIT_REQ = 0x02,     /**< Init request */
+    EOE_FRAME_TYPE_INIT_RES = 0x03      /**< Init response */
+} eoe_frame_type_t;
+```
+
+### 4.6 ADS over EtherCAT (AoE)
+
+AoE provides TwinCAT ADS protocol over EtherCAT.
+
+#### 4.6.1 AoE Header
+
+```c
+/**
+ * @brief AoE header structure
+ */
+typedef struct __attribute__((packed)) {
+    uint16_t target_net_id[3];          /**< Target Net ID (6 bytes) */
+    uint16_t target_port;               /**< Target port */
+    uint16_t source_net_id[3];          /**< Source Net ID (6 bytes) */
+    uint16_t source_port;               /**< Source port */
+    uint16_t command_id;                /**< ADS command ID */
+    uint16_t state_flags;               /**< State flags */
+    uint32_t data_length;               /**< Data length */
+    uint32_t error_code;                /**< Error code */
+    uint32_t invoke_id;                 /**< Invoke ID */
+    uint8_t data[];                     /**< ADS data */
+} aoe_header_t;
+
+#define AOE_HEADER_SIZE 32
+```
+
+### 4.7 Protocol Selection and Usage
+
+```c
+/**
+ * @brief Get protocol name string
+ *
+ * @param type Mailbox protocol type
+ * @return Pointer to protocol name string
+ */
+const char* mailbox_get_protocol_name(mailbox_type_t type);
+
+/**
+ * @brief Check if protocol is supported by slave
+ *
+ * @param slave_address Slave station address
+ * @param type Mailbox protocol type
+ * @param supported Pointer to receive support flag
+ * @return AL_STATUS_SUCCESS on success, error code otherwise
+ */
+al_status_t mailbox_check_protocol_support(uint16_t slave_address,
+                                            mailbox_type_t type,
+                                            bool* supported);
+```
+
+### 4.8 Protocol Timing and Constraints
+
+```c
+/**
+ * @brief Protocol timing constraints
+ */
+#define COE_SDO_TIMEOUT_MS          1000    /**< SDO operation timeout */
+#define FOE_TRANSFER_TIMEOUT_MS     5000    /**< FoE transfer timeout */
+#define SOE_TIMEOUT_MS              500     /**< SoE operation timeout */
+#define VOE_TIMEOUT_MS              1000    /**< VoE operation timeout */
+#define EOE_FRAGMENT_TIMEOUT_MS     100     /**< EoE fragment timeout */
+
+#define FOE_MAX_DATA_SIZE           512     /**< Maximum FoE data per packet */
+#define EOE_MAX_FRAGMENT_SIZE       1486    /**< Maximum EoE fragment size */
+```
 
 ---
 
