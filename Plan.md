@@ -730,17 +730,19 @@ This implementation plan follows a bottom-up approach, starting with the Data Li
 - [ ] M5.1.13: Integration tests complete (TODO - optional)
 - [x] M5.1.14: Documentation complete
 
-#### Phase 5.2 - Redundancy Support (Priority: LOW - Optional)
-- [ ] M5.2.1: Redundancy types defined
-- [ ] M5.2.2: Multi-port HAL types defined
-- [ ] M5.2.3: HAL multi-port functions implemented
-- [ ] M5.2.4: Port status tracking implemented
-- [ ] M5.2.5: Port switching logic implemented
-- [ ] M5.2.6: Automatic failover implemented
-- [ ] M5.2.7: Cable redundancy tested
-- [ ] M5.2.8: Frame redundancy tested
-- [ ] M5.2.9: Hot connect tested
-- [ ] M5.2.10: Redundancy documentation complete
+#### Phase 5.2 - Redundancy Support (Priority: LOW - Design Complete)
+- [x] M5.2.1: Redundancy types defined (in process_data.h)
+- [x] M5.2.2: Multi-port HAL types defined (in hal.h)
+- [x] M5.2.3: HAL multi-port API defined (6 functions)
+- [x] M5.2.4: HAL stub functions implemented (hal.c)
+- [x] M5.2.5: Design document created (REDUNDANCY.md)
+- [ ] M5.2.6: Full HAL multi-port implementation (TODO)
+- [ ] M5.2.7: Process data redundancy logic (TODO)
+- [ ] M5.2.8: Automatic failover implemented (TODO)
+- [ ] M5.2.9: Cable redundancy tested (TODO)
+- [ ] M5.2.10: Frame redundancy tested (TODO)
+- [ ] M5.2.11: Hot connect tested (TODO)
+- [ ] M5.2.12: Redundancy documentation complete (TODO)
 
 #### Phase 5.3 - Examples and Testing ✅ Complete
 - [x] M5.3.1: Simple cyclic example created (simple_cyclic.c - 380 lines)
@@ -905,12 +907,12 @@ ethercat-master/
 | Phase 3.6: VoE | Not Started | 0% |
 | Phase 4: Network Scanning & Configuration | ✅ Complete | 100% |
 | Phase 5.1: Process Data & Cyclic Operation | ✅ Complete | 100% |
-| Phase 5.2: Redundancy Support | Not Started | 0% |
+| Phase 5.2: Redundancy Support | 🔵 Design Complete | 40% |
 | Phase 5.3: Examples and Testing | ✅ Complete | 100% |
 
-**Overall Progress**: 78% (5.3 of 6.8 phases complete)
+**Overall Progress**: 80% (5.4 of 6.8 phases complete)
 
-**Current Status**: Phase 5.3 Complete - Examples and Testing ✅
+**Current Status**: Phase 5.2 Design Complete - Redundancy Support (Stub Implementation) 🔵
 
 **Phase 4 Status**:
 - ✅ Master control API defined (master.h)
@@ -951,16 +953,13 @@ ethercat-master/
 6. ⏳ **VoE** (Vendor specific) - Optional
 
 **Next Steps**:
-1. **Phase 5.2 (LOW Priority - Optional)**: Redundancy Support
-   - Multi-port HAL support
-   - Cable/Frame redundancy
-   - Hot connect support
-   - Advanced feature for high-availability systems
-2. **Phase 5.3 (Recommended)**: Examples and Testing
-   - Simple cyclic I/O example
-   - Process data demonstration
-   - Performance benchmarks
-3. Phase 3.2-3.6: Implement remaining protocols (FoE, SoE, EoE, AoE, VoE) - All optional
+1. **Phase 5.2 Full Implementation** (Optional): Complete redundancy support
+   - Implement full multi-port HAL
+   - Add redundancy logic to process_data.c
+   - Test with dual network interfaces
+   - Estimated effort: 33-48 hours
+2. **Phase 3.2-3.6** (Optional): Additional protocols (FoE, SoE, EoE, AoE, VoE)
+3. **System Testing**: Validate with real EtherCAT hardware
 
 ### Completed Milestones
 
@@ -1282,4 +1281,5 @@ Output:
 | 5.0.0 | 2026-01-03 | Claude Code | Added Phase 5 detailed plan (Process Data + Cyclic Operation with Redundancy) |
 | 5.1.0 | 2026-01-03 | Claude Code | Updated after Phase 5.1 completion (Process Data and Cyclic Operation) |
 | 5.3.0 | 2026-01-03 | Claude Code | Updated after Phase 5.3 completion (Examples and Testing) |
+| 5.4.0 | 2026-01-04 | Claude Code | Updated after Phase 5.2 design completion (Redundancy Support - Stub Implementation) |
 

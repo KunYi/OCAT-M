@@ -491,3 +491,126 @@ void hal_sleep_us(uint32_t us)
 
     ops->sleep_us(us);
 }
+
+/* ========================================================================== */
+/* HAL Multi-Port Support (Phase 5.2 - Stub Implementation)                 */
+/* ========================================================================== */
+
+hal_status_t hal_init_multiport(const hal_config_t* primary_config,
+                                 const hal_config_t* secondary_config)
+{
+    if (primary_config == NULL || secondary_config == NULL) {
+        return HAL_STATUS_INVALID_PARAM;
+    }
+
+    if (g_hal_context.initialized) {
+        return HAL_STATUS_ALREADY_INIT;
+    }
+
+    /* TODO: Full multi-port implementation
+     * For now, initialize only primary port and store config for secondary
+     */
+
+    /* Initialize primary port */
+    hal_status_t status = hal_init(primary_config);
+    if (status != HAL_STATUS_SUCCESS) {
+        return status;
+    }
+
+    /* Store secondary config for future use */
+    memcpy(&g_hal_context.config_secondary, secondary_config, sizeof(hal_config_t));
+    g_hal_context.port_count = 2;
+
+    return HAL_STATUS_SUCCESS;
+}
+
+hal_status_t hal_send_frame_port(hal_frame_buffer_t* buffer, uint8_t port)
+{
+    if (buffer == NULL) {
+        return HAL_STATUS_INVALID_PARAM;
+    }
+
+    if (!g_hal_context.initialized) {
+        return HAL_STATUS_NOT_INITIALIZED;
+    }
+
+    if (port >= g_hal_context.port_count) {
+        return HAL_STATUS_INVALID_PARAM;
+    }
+
+    /* TODO: Port-specific send
+     * For now, send on primary port regardless of port parameter
+     */
+    buffer->port = port;
+    return hal_send_frame(buffer);
+}
+
+hal_status_t hal_receive_frame_port(hal_frame_buffer_t** buffer, uint8_t port)
+{
+    if (buffer == NULL) {
+        return HAL_STATUS_INVALID_PARAM;
+    }
+
+    if (!g_hal_context.initialized) {
+        return HAL_STATUS_NOT_INITIALIZED;
+    }
+
+    if (port >= g_hal_context.port_count) {
+        return HAL_STATUS_INVALID_PARAM;
+    }
+
+    /* TODO: Port-specific receive
+     * For now, receive from primary port regardless of port parameter
+     */
+    hal_status_t status = hal_receive_frame(buffer);
+    if (status == HAL_STATUS_SUCCESS && *buffer != NULL) {
+        (*buffer)->port = port;
+    }
+    return status;
+}
+
+bool hal_is_port_link_up(uint8_t port)
+{
+    if (!g_hal_context.initialized) {
+        return false;
+    }
+
+    if (port >= g_hal_context.port_count) {
+        return false;
+    }
+
+    /* TODO: Port-specific link status
+     * For now, return primary port link status for all ports
+     */
+    return hal_is_link_up();
+}
+
+hal_status_t hal_get_port_statistics(uint8_t port, hal_statistics_t* stats)
+{
+    if (stats == NULL) {
+        return HAL_STATUS_INVALID_PARAM;
+    }
+
+    if (!g_hal_context.initialized) {
+        return HAL_STATUS_NOT_INITIALIZED;
+    }
+
+    if (port >= g_hal_context.port_count) {
+        return HAL_STATUS_INVALID_PARAM;
+    }
+
+    /* TODO: Port-specific statistics
+     * For now, return primary port statistics for all ports
+     */
+    return hal_get_statistics(stats);
+}
+
+uint8_t hal_get_port_count(void)
+{
+    if (!g_hal_context.initialized) {
+        return 0;
+    }
+
+    return g_hal_context.port_count;
+}
+

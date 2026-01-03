@@ -294,6 +294,79 @@ void hal_sleep_ms(uint32_t ms);
 void hal_sleep_us(uint32_t us);
 
 /* ========================================================================== */
+/* HAL Multi-Port Support (Phase 5.2 - Redundancy)                          */
+/* ========================================================================== */
+
+/**
+ * @brief Initialize HAL with multiple ports for redundancy
+ *
+ * This function initializes the HAL with two network interfaces for
+ * redundant operation. Both interfaces must be configured identically
+ * except for the interface name.
+ *
+ * @param primary_config Configuration for primary port
+ * @param secondary_config Configuration for secondary port
+ * @return HAL_STATUS_SUCCESS on success, error code otherwise
+ */
+hal_status_t hal_init_multiport(const hal_config_t* primary_config,
+                                 const hal_config_t* secondary_config);
+
+/**
+ * @brief Send frame on specific port
+ *
+ * This function sends a frame on the specified port (0=primary, 1=secondary).
+ * Used for redundancy modes that require port-specific transmission.
+ *
+ * @param buffer Pointer to frame buffer to send
+ * @param port Port number (0=primary, 1=secondary)
+ * @return HAL_STATUS_SUCCESS on success, error code otherwise
+ */
+hal_status_t hal_send_frame_port(hal_frame_buffer_t* buffer, uint8_t port);
+
+/**
+ * @brief Receive frame from specific port
+ *
+ * This function receives a frame from the specified port.
+ * Used for redundancy modes that require port-specific reception.
+ *
+ * @param buffer Pointer to store received frame buffer
+ * @param port Port number (0=primary, 1=secondary)
+ * @return HAL_STATUS_SUCCESS on success, error code otherwise
+ */
+hal_status_t hal_receive_frame_port(hal_frame_buffer_t** buffer, uint8_t port);
+
+/**
+ * @brief Check if port link is up
+ *
+ * This function checks the link status of a specific port.
+ *
+ * @param port Port number (0=primary, 1=secondary)
+ * @return true if link is up, false otherwise
+ */
+bool hal_is_port_link_up(uint8_t port);
+
+/**
+ * @brief Get port statistics
+ *
+ * This function retrieves statistics for a specific port.
+ *
+ * @param port Port number (0=primary, 1=secondary)
+ * @param stats Pointer to statistics structure to fill
+ * @return HAL_STATUS_SUCCESS on success, error code otherwise
+ */
+hal_status_t hal_get_port_statistics(uint8_t port, hal_statistics_t* stats);
+
+/**
+ * @brief Get number of ports
+ *
+ * This function returns the number of ports initialized.
+ * Returns 1 for single-port mode, 2 for multi-port mode.
+ *
+ * @return Number of ports (1 or 2)
+ */
+uint8_t hal_get_port_count(void);
+
+/* ========================================================================== */
 /* HAL Platform-Specific Functions                                           */
 /* ========================================================================== */
 

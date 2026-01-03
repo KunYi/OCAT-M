@@ -23,11 +23,13 @@ extern "C" {
 
 typedef struct {
     bool initialized;
-    hal_config_t config;
+    uint8_t port_count;                      /**< Number of ports (1 or 2) */
+    hal_config_t config;                     /**< Primary port configuration */
+    hal_config_t config_secondary;           /**< Secondary port configuration (if multiport) */
     hal_callbacks_t callbacks;
     hal_statistics_t statistics;
     hal_device_info_t device_info;
-    void* platform_context;  /* Platform-specific context */
+    void* platform_context;                  /**< Platform-specific context */
 } hal_context_t;
 
 /* ========================================================================== */
