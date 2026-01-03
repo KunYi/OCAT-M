@@ -8,6 +8,7 @@
 #include "ethercat/master.h"
 #include "ethercat/scan.h"
 #include "ethercat/config.h"
+#include "ethercat/dc.h"
 #include "ethercat/al.h"
 #include "ethercat/coe.h"
 #include "ethercat/dll.h"
@@ -125,6 +126,18 @@ master_status_t master_init(const master_config_t* config)
         return MASTER_STATUS_ERROR;
     }
 
+    /* Initialize DC module */
+    dc_status_t dc_status = dc_init();
+    if (dc_status != DC_STATUS_SUCCESS) {
+        config_shutdown();
+        scan_shutdown();
+        coe_shutdown();
+        al_shutdown();
+        dl_shutdown();
+        hal_shutdown();
+        return MASTER_STATUS_ERROR;
+    }
+
     g_master_context.state = MASTER_STATE_IDLE;
     g_master_context.initialized = true;
 
@@ -143,6 +156,7 @@ master_status_t master_shutdown(void)
     }
 
     /* Shutdown all modules */
+    dc_shutdown();
     config_shutdown();
     scan_shutdown();
     coe_shutdown();

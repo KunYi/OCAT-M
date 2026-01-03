@@ -722,17 +722,19 @@ ethercat-master/
 | Phase 4: Network Scanning & Configuration | ✅ Complete | 100% |
 | Phase 5: Integration | Not Started | 0% |
 
-**Overall Progress**: 65% (4.1 of 6.3 phases complete)
+**Overall Progress**: 70% (4.4 of 6.3 phases complete)
 
-**Current Status**: Phase 4 Complete - Network Scanning, Master Control, and Slave Configuration
+**Current Status**: Phase 4 Complete - Network Scanning, Master Control, Slave Configuration, and Distributed Clocks
 
 **Phase 4 Status**:
 - ✅ Master control API defined (master.h)
 - ✅ Network scanning API defined (scan.h)
 - ✅ Slave configuration API defined (config.h)
+- ✅ Distributed Clocks API defined (dc.h)
 - ✅ Master core implementation (master.c - 461 lines)
 - ✅ Full scan implementation (scan.c - 735 lines)
 - ✅ Full configuration implementation (config.c - 668 lines)
+- ✅ Full DC implementation (dc.c - 694 lines)
 - ✅ BRD (Broadcast Read) for slave discovery
 - ✅ APRD/APWR (Auto-increment Physical Read/Write)
 - ✅ FPRD/FPWR (Configured Physical Read/Write)
@@ -746,7 +748,13 @@ ethercat-master/
 - ✅ PDO mapping configuration (read TxPDO/RxPDO from EEPROM)
 - ✅ Mailbox configuration (setup mailbox Sync Managers)
 - ✅ Process data offset calculation
-- ⏳ Distributed Clocks (TODO - optional)
+- ✅ DC support detection
+- ✅ System time synchronization
+- ✅ Reference clock selection
+- ✅ Propagation delay measurement
+- ✅ SYNC0/SYNC1 configuration
+- ✅ Drift compensation
+- ✅ DC monitoring and statistics
 
 **Application Layer Protocols** (ETG1000.6):
 1. ✅ **CoE** (CANopen over EtherCAT) - Complete
@@ -758,8 +766,7 @@ ethercat-master/
 
 **Next Steps**:
 1. **Phase 5 (Recommended)**: Integration and cyclic operation (LRW for process data)
-2. Phase 4.3: Implement Distributed Clocks (optional)
-3. Phase 3.2-3.6: Implement remaining protocols (FoE, SoE, EoE, AoE, VoE) - All optional
+2. Phase 3.2-3.6: Implement remaining protocols (FoE, SoE, EoE, AoE, VoE) - All optional
 
 ### Completed Milestones
 
@@ -832,35 +839,44 @@ ethercat-master/
 - [x] M4.1: Master control API defined (master.h)
 - [x] M4.2: Network scanning API defined (scan.h)
 - [x] M4.3: Slave configuration API defined (config.h)
-- [x] M4.4: Master internal structures defined (master_internal.h)
-- [x] M4.5: Master core implementation (master.c - 461 lines)
-- [x] M4.6: Full scan implementation (scan.c - 735 lines)
-- [x] M4.7: Full configuration implementation (config.c - 668 lines)
-- [x] M4.8: BRD (Broadcast Read) for slave discovery implemented
-- [x] M4.9: APRD (Auto-increment Physical Read) implemented
-- [x] M4.10: APWR (Auto-increment Physical Write) for address assignment implemented
-- [x] M4.11: FPRD/FPWR (Configured Physical Read/Write) implemented
-- [x] M4.12: SII EEPROM read state machine implemented
-- [x] M4.13: Slave identification reading implemented
-- [x] M4.14: EEPROM category reading implemented
-- [x] M4.15: Slave name reading implemented
-- [x] M4.16: Topology detection implemented
-- [x] M4.17: Sync Manager configuration implemented
-- [x] M4.18: FMMU configuration implemented
-- [x] M4.19: PDO mapping configuration implemented
-- [x] M4.20: Mailbox configuration implemented
-- [x] M4.21: Process data offset calculation implemented
-- [x] M4.22: Build integration successful (0 errors, 0 warnings)
-- [ ] M4.23: Distributed Clocks implementation (TODO - optional)
-- [ ] M4.24: Unit tests (TODO - optional)
+- [x] M4.4: Distributed Clocks API defined (dc.h)
+- [x] M4.5: Master internal structures defined (master_internal.h)
+- [x] M4.6: Master core implementation (master.c - 461 lines)
+- [x] M4.7: Full scan implementation (scan.c - 735 lines)
+- [x] M4.8: Full configuration implementation (config.c - 668 lines)
+- [x] M4.9: Full DC implementation (dc.c - 694 lines)
+- [x] M4.10: BRD (Broadcast Read) for slave discovery implemented
+- [x] M4.11: APRD (Auto-increment Physical Read) implemented
+- [x] M4.12: APWR (Auto-increment Physical Write) for address assignment implemented
+- [x] M4.13: FPRD/FPWR (Configured Physical Read/Write) implemented
+- [x] M4.14: SII EEPROM read state machine implemented
+- [x] M4.15: Slave identification reading implemented
+- [x] M4.16: EEPROM category reading implemented
+- [x] M4.17: Slave name reading implemented
+- [x] M4.18: Topology detection implemented
+- [x] M4.19: Sync Manager configuration implemented
+- [x] M4.20: FMMU configuration implemented
+- [x] M4.21: PDO mapping configuration implemented
+- [x] M4.22: Mailbox configuration implemented
+- [x] M4.23: Process data offset calculation implemented
+- [x] M4.24: DC support detection implemented
+- [x] M4.25: System time synchronization implemented
+- [x] M4.26: Reference clock selection implemented
+- [x] M4.27: Propagation delay measurement implemented
+- [x] M4.28: SYNC0/SYNC1 configuration implemented
+- [x] M4.29: Drift compensation implemented
+- [x] M4.30: DC monitoring and statistics implemented
+- [x] M4.31: Build integration successful (0 errors, 0 warnings)
+- [ ] M4.32: Unit tests (TODO - optional)
 
 **Phase 4 Implementation**:
-- 7 files (master.h, scan.h, config.h, master_internal.h, master.c, scan.c, config.c)
-- 1,864 lines of code (master.c 461 + scan.c 735 + config.c 668)
+- 8 files (master.h, scan.h, config.h, dc.h, master_internal.h, master.c, scan.c, config.c, dc.c)
+- 2,558 lines of code (master.c 461 + scan.c 735 + config.c 668 + dc.c 694)
 - 0 compilation errors, 0 warnings
 - Full integration with DLL, HAL, AL, and CoE layers
 - Complete network scanning with EEPROM reading
 - Complete slave configuration with Sync Manager, FMMU, PDO, and Mailbox setup
+- Complete Distributed Clocks implementation with synchronization and drift compensation
 
 **Key Features**:
 - **Master Control**: Initialization, shutdown, state management
@@ -878,6 +894,13 @@ ethercat-master/
 - **PDO Mapping**: Read TxPDO/RxPDO configuration from EEPROM
 - **Mailbox Setup**: Configure mailbox Sync Managers for CoE/FoE/SoE/EoE communication
 - **Process Data Layout**: Calculate logical memory offsets for all slaves
+- **DC Support Detection**: Check if slave supports Distributed Clocks
+- **System Time Sync**: Read and synchronize slave system times
+- **Reference Clock**: Automatic selection of reference clock slave
+- **Propagation Delay**: Measure and compensate for network delays
+- **SYNC0/SYNC1**: Configure synchronization signals for precise timing
+- **Drift Compensation**: Automatic clock drift correction
+- **DC Monitoring**: Statistics and diagnostics for DC performance
 - **Slave Management**: Information tracking, configuration orchestration
 - **Cyclic Operation**: Start/stop control, cycle processing framework
 - **Integration**: Seamless integration with all lower layers
@@ -896,9 +919,16 @@ ethercat-master/
 - ✅ PDO mapping configuration
 - ✅ Mailbox configuration
 - ✅ Process data offset calculation
+- ✅ DC support detection
+- ✅ System time synchronization
+- ✅ Reference clock selection
+- ✅ Propagation delay measurement
+- ✅ SYNC0/SYNC1 configuration
+- ✅ Drift compensation
+- ✅ DC monitoring and statistics
 
 **Remaining Items**:
-- ⏳ Distributed Clocks (optional)
+- None (Phase 4 Complete)
 
 ### Build Statistics
 
@@ -907,16 +937,16 @@ Source Files:
   DLL:      11 files
   HAL:      3 files
   AL:       5 files
-  Master:   3 files
-  Total:    22 files
+  Master:   4 files
+  Total:    23 files
 
 Lines of Code:
   DLL:      ~3,500 lines
   HAL:      ~800 lines
   AL:       ~1,340 lines
   CoE:      ~753 lines
-  Master:   ~1,864 lines (master.c 461 + scan.c 735 + config.c 668)
-  Total:    ~8,257 lines
+  Master:   ~2,558 lines (master.c 461 + scan.c 735 + config.c 668 + dc.c 694)
+  Total:    ~8,951 lines
 
 Build Status: ✅ Success (0 errors, 0 warnings)
 Output:       build/lib/libethercat.a
@@ -936,4 +966,5 @@ Output:       build/lib/libethercat.a
 | 3.0.0 | 2026-01-03 | Claude Code | Updated after Phase 4 start (Network Scanning - Stub Implementation) |
 | 3.1.0 | 2026-01-03 | Claude Code | Updated after Phase 4.1 completion (Network Scanning - Full Implementation) |
 | 4.0.0 | 2026-01-03 | Claude Code | Updated after Phase 4.2 completion (Slave Configuration - Full Implementation) |
+| 4.1.0 | 2026-01-03 | Claude Code | Updated after Phase 4.3 completion (Distributed Clocks - Full Implementation) |
 

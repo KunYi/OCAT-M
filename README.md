@@ -242,16 +242,16 @@ Source Files:
   DLL:      11 files
   HAL:      3 files
   AL:       5 files
-  Master:   3 files
-  Total:    22 files
+  Master:   4 files
+  Total:    23 files
 
 Lines of Code:
   DLL:      ~3,500 lines
   HAL:      ~800 lines
   AL:       ~1,340 lines
   CoE:      ~753 lines
-  Master:   ~1,864 lines (master.c 461 + scan.c 735 + config.c 668)
-  Total:    ~8,257 lines
+  Master:   ~2,558 lines (master.c 461 + scan.c 735 + config.c 668 + dc.c 694)
+  Total:    ~8,951 lines
 
 Build Status: ✅ Success (0 errors, 0 warnings)
 Output:       build/lib/libethercat.a
@@ -289,7 +289,8 @@ ethercat-master/
 │   ├── coe.h                    # CoE interface
 │   ├── master.h                 # Master control interface
 │   ├── scan.h                   # Network scanning interface
-│   └── config.h                 # Slave configuration interface
+│   ├── config.h                 # Slave configuration interface
+│   └── dc.h                     # Distributed Clocks interface
 ├── src/dll/                     # DLL implementation
 │   ├── dll_init.c               # Initialization
 │   ├── dll_tx.c                 # Transmission
@@ -319,7 +320,8 @@ ethercat-master/
 │   ├── master.c                 # Master control core
 │   ├── master_internal.h        # Master internal definitions
 │   ├── scan.c                   # Network scanning
-│   └── config.c                 # Slave configuration
+│   ├── config.c                 # Slave configuration
+│   └── dc.c                     # Distributed Clocks
 ├── tests/dll/                   # Unit tests
 │   ├── test_dll_state.c         # State machine tests
 │   ├── test_dll_queue.c         # Queue tests
@@ -386,10 +388,14 @@ make info
 - ✅ Process data offset calculation
 - ✅ Complete slave configuration orchestration
 
-**Phase 4.3 - Distributed Clocks** (Optional):
-- DC synchronization
-- Drift compensation
-- DC monitoring
+**Phase 4.3 - Distributed Clocks** ✅ Complete:
+- ✅ DC support detection
+- ✅ System time synchronization
+- ✅ Reference clock selection
+- ✅ Propagation delay measurement
+- ✅ SYNC0/SYNC1 configuration
+- ✅ Drift compensation
+- ✅ DC monitoring and statistics
 
 ### Phase 5 - Cyclic Operation and Process Data (Recommended)
 - LRW (Logical Read/Write) for process data
@@ -456,4 +462,4 @@ This is a clean-room implementation based on publicly available ETG specificatio
 ---
 
 **Last Updated**: 2026-01-03
-**Version**: 4.0.0 (Phase 1-2 Complete, Phase 3.1 CoE Complete, Phase 4 Network Scanning and Slave Configuration Complete)
+**Version**: 4.1.0 (Phase 1-2 Complete, Phase 3.1 CoE Complete, Phase 4 Complete - Network Scanning, Slave Configuration, and Distributed Clocks)
