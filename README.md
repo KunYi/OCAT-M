@@ -4,7 +4,7 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
 
 ## Project Status
 
-**Current Phase**: Phase 4 - Network Scanning and Master Control (In Progress 🔄)
+**Current Phase**: Phase 4 Complete - Network Scanning and Master Control ✅
 
 ### Completed Components
 
@@ -128,7 +128,7 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
   - `hal_sleep_us()` - Sleep for microseconds
   - Platform implementations: Linux (POSIX) and Stub
 
-#### Phase 4 - Network Scanning and Master Control 🔄 (In Progress)
+#### Phase 4 - Network Scanning and Master Control ✅ (Complete)
 
 ##### Phase 4.1 - Master Control API ✅
 - **Master Types and API**:
@@ -139,7 +139,7 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
   - Master configuration structure
 
 - **Master Implementation**:
-  - `src/master/master.c` - Master core implementation (450+ lines)
+  - `src/master/master.c` - Master core implementation (461 lines)
   - `src/master/master_internal.h` - Internal definitions
 
 - **Features**:
@@ -161,36 +161,48 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
   - `master_start_cyclic()` / `master_stop_cyclic()` - Cyclic operation
   - `master_process_cycle()` - Process one cycle
 
-##### Phase 4.2 - Network Scanning API ✅
+##### Phase 4.2 - Network Scanning Implementation ✅
 - **Scan Types and API**:
   - `include/ethercat/scan.h` - Network scanning public API
   - SII (EEPROM) category definitions
   - Slave discovery structures
   - Port descriptor definitions
 
-- **Scan Implementation** (Stub Version):
-  - `src/master/scan.c` - Network scanning implementation (240+ lines)
-  - **NOTE**: Current implementation is a stub with TODO markers
-  - Full implementation requires proper frame_builder/parser integration
+- **Scan Implementation** (Full Version):
+  - `src/master/scan.c` - Network scanning implementation (735 lines)
+  - Complete implementation with all EtherCAT commands
+  - Full frame_builder/parser integration
 
-- **Planned Features** (TODO):
-  - Slave discovery using BRD (Broadcast Read)
-  - Station address assignment using APWR
-  - EEPROM (SII) reading via ESC registers
-  - Slave identification (Vendor ID, Product Code, Revision, Serial Number)
-  - Slave name reading from EEPROM
-  - Topology detection via port descriptors
-  - Category-based EEPROM reading
+- **Implemented Features**:
+  - ✅ Slave discovery using BRD (Broadcast Read)
+  - ✅ Station address assignment using APWR (Auto-increment Physical Write)
+  - ✅ Register reading using APRD (Auto-increment Physical Read)
+  - ✅ Register access using FPRD/FPWR (Configured Physical Read/Write)
+  - ✅ EEPROM (SII) reading via ESC registers with full state machine
+  - ✅ Slave identification (Vendor ID, Product Code, Revision, Serial Number)
+  - ✅ Slave name reading from EEPROM
+  - ✅ Topology detection via port descriptors
+  - ✅ Category-based EEPROM reading
 
 - **API Functions**:
   - `scan_init()` / `scan_shutdown()` - Scan module lifecycle
-  - `scan_discover_slaves()` - Discover all slaves (TODO)
-  - `scan_assign_station_addresses()` - Assign addresses (TODO)
-  - `scan_read_eeprom_word()` - Read EEPROM word (TODO)
-  - `scan_read_slave_id()` - Read slave identification (TODO)
-  - `scan_read_slave_name()` - Read slave name (TODO)
-  - `scan_read_eeprom_category()` - Read EEPROM category (TODO)
-  - `scan_detect_topology()` - Detect network topology (TODO)
+  - `scan_discover_slaves()` - Discover all slaves using BRD
+  - `scan_get_discovery_info()` - Get discovery information for a slave
+  - `scan_assign_station_addresses()` - Assign station addresses using APWR
+  - `scan_read_eeprom_word()` - Read EEPROM word with SII state machine
+  - `scan_read_slave_id()` - Read slave identification
+  - `scan_read_slave_name()` - Read slave name from STRINGS category
+  - `scan_read_eeprom_category()` - Read EEPROM category data
+  - `scan_detect_topology()` - Detect network topology
+
+- **Implementation Details**:
+  - **BRD Command**: Broadcasts Type register read, Working Counter = slave count
+  - **APRD/APWR**: Auto-increment addressing with negative position `-(i+1)`
+  - **FPRD/FPWR**: Configured addressing with station address (0x1000+)
+  - **SII State Machine**: Write Address → Write Control → Poll BUSY → Read Data
+  - **Address Format**: `(address_high << 16) | register_offset`
+  - **Timeout Handling**: Uses HAL time functions for precise timeout control
+  - **Frame Management**: Proper RX buffer allocation and deallocation
 
 ##### Phase 2.3 - Mailbox Communication ✅
 - **Implementation**:
@@ -232,6 +244,14 @@ Source Files:
   AL:       5 files
   Master:   2 files
   Total:    21 files
+
+Lines of Code:
+  DLL:      ~3,500 lines
+  HAL:      ~800 lines
+  AL:       ~1,340 lines
+  CoE:      ~753 lines
+  Master:   ~1,196 lines
+  Total:    ~7,589 lines
 
 Build Status: ✅ Success (0 errors, 0 warnings)
 Output:       build/lib/libethercat.a
@@ -339,18 +359,35 @@ make info
 
 ## Next Steps
 
-### Phase 3 - Application Layer Protocols (CoE Complete ✅)
+### Phase 4 - Network Scanning and Master Control (Mostly Complete ✅)
 
-**Phase 3.1 - CoE (CANopen over EtherCAT)** ✅ Complete:
-- ✅ SDO Download/Upload (expedited mode)
-- ✅ SDO Download/Upload (segmented mode)
-- ✅ Object Dictionary access
-- ✅ Mailbox integration
-- ✅ Timeout mechanism with HAL time functions
-- ✅ Toggle bit verification for data integrity
-- ⏳ TODO: Unit tests (optional)
+**Phase 4.1 - Network Scanning** ✅ Complete:
+- ✅ Slave discovery using BRD (Broadcast Read)
+- ✅ Station address assignment using APWR
+- ✅ EEPROM (SII) reading with full state machine
+- ✅ Slave identification (Vendor ID, Product Code, Revision, Serial)
+- ✅ Slave name reading from EEPROM
+- ✅ Topology detection via port descriptors
+- ✅ Category-based EEPROM reading
 
-**Remaining Protocols** (All Optional):
+**Phase 4.2 - Slave Configuration** (Next Priority - Recommended):
+- Sync Manager configuration
+- PDO mapping configuration
+- Mailbox configuration
+- FMMU configuration
+
+**Phase 4.3 - Distributed Clocks** (Optional):
+- DC synchronization
+- Drift compensation
+- DC monitoring
+
+### Phase 5 - Cyclic Operation and Process Data (Recommended)
+- LRW (Logical Read/Write) for process data
+- Cyclic frame transmission
+- Working counter validation
+- Real-time performance optimization
+
+### Phase 3 - Remaining Application Layer Protocols (All Optional)
 
 **Phase 3.2 - FoE (File over EtherCAT)**:
 - File read/write
@@ -373,18 +410,6 @@ make info
 
 **Phase 3.6 - VoE (Vendor specific over EtherCAT)**:
 - Vendor-specific protocols
-
-### Phase 4 - Network Scanning and Configuration (Next Priority - Recommended)
-- Slave discovery
-- Topology detection
-- EEPROM reading
-- Automatic configuration
-
-### Phase 5 - Process Data and Distributed Clocks (Planned)
-- PDO mapping
-- Cyclic data exchange
-- DC synchronization
-- Real-time performance
 
 ## Technical Specifications
 
@@ -421,4 +446,4 @@ This is a clean-room implementation based on publicly available ETG specificatio
 ---
 
 **Last Updated**: 2026-01-03
-**Version**: 2.2.0 (Phase 1-2 Complete, Phase 3.1 CoE Complete with Segmented Transfer)
+**Version**: 3.1.0 (Phase 1-2 Complete, Phase 3.1 CoE Complete, Phase 4 Network Scanning Complete)

@@ -357,8 +357,98 @@ scan_status_t scan_assign_station_addresses(uint16_t slave_count, uint32_t timeo
 }
 
 /* ========================================================================== */
-/* EEPROM (SII) Reading - To be continued...                                */
+/* EEPROM (SII) Reading                                                      */
 /* ========================================================================== */
+
+/**
+ * @brief Read ESC register using FPRD
+ */
+static scan_status_t fprd_register(uint16_t station_address,
+                                    uint16_t reg_address,
+                                    uint8_t* data,
+                                    uint16_t length,
+                                    uint32_t timeout_ms)
+{
+    uint8_t frame_buffer[1518];
+    ecat_frame_builder_t builder;
+
+    dl_status_t status = ecat_frame_builder_init(&builder, frame_buffer, sizeof(frame_buffer),
+                                                  g_scan_context.master_mac, ECAT_BROADCAST_MAC);
+    if (status != DL_STATUS_SUCCESS) {
+        return SCAN_STATUS_ERROR;
+    }
+
+    /* FPRD address format: station_address in high 16 bits, offset in low 16 bits */
+    uint32_t fprd_addr = ((uint32_t)station_address << 16) | reg_address;
+
+    status = ecat_frame_builder_add_datagram(&builder, ECAT_CMD_FPRD, 0,
+                                              fprd_addr, NULL, length, false);
+    if (status != DL_STATUS_SUCCESS) {
+        return SCAN_STATUS_ERROR;
+    }
+
+    uint16_t frame_length;
+    status = ecat_frame_builder_finalize(&builder, &frame_length);
+    if (status != DL_STATUS_SUCCESS) {
+        return SCAN_STATUS_ERROR;
+    }
+
+    /* Send and receive */
+    ecat_parsed_datagram_t response;
+    scan_status_t scan_status = send_and_receive(frame_buffer, frame_length, &response, timeout_ms);
+
+    if (scan_status != SCAN_STATUS_SUCCESS) {
+        return scan_status;
+    }
+
+    /* Copy data */
+    if (response.length >= length) {
+        memcpy(data, response.data, length);
+        return SCAN_STATUS_SUCCESS;
+    }
+
+    return SCAN_STATUS_ERROR;
+}
+
+/**
+ * @brief Write ESC register using FPWR
+ */
+static scan_status_t fpwr_register(uint16_t station_address,
+                                    uint16_t reg_address,
+                                    const uint8_t* data,
+                                    uint16_t length,
+                                    uint32_t timeout_ms)
+{
+    uint8_t frame_buffer[1518];
+    ecat_frame_builder_t builder;
+
+    dl_status_t status = ecat_frame_builder_init(&builder, frame_buffer, sizeof(frame_buffer),
+                                                  g_scan_context.master_mac, ECAT_BROADCAST_MAC);
+    if (status != DL_STATUS_SUCCESS) {
+        return SCAN_STATUS_ERROR;
+    }
+
+    /* FPWR address format: station_address in high 16 bits, offset in low 16 bits */
+    uint32_t fpwr_addr = ((uint32_t)station_address << 16) | reg_address;
+
+    status = ecat_frame_builder_add_datagram(&builder, ECAT_CMD_FPWR, 0,
+                                              fpwr_addr, data, length, false);
+    if (status != DL_STATUS_SUCCESS) {
+        return SCAN_STATUS_ERROR;
+    }
+
+    uint16_t frame_length;
+    status = ecat_frame_builder_finalize(&builder, &frame_length);
+    if (status != DL_STATUS_SUCCESS) {
+        return SCAN_STATUS_ERROR;
+    }
+
+    /* Send and receive */
+    ecat_parsed_datagram_t response;
+    scan_status_t scan_status = send_and_receive(frame_buffer, frame_length, &response, timeout_ms);
+
+    return scan_status;
+}
 
 scan_status_t scan_read_eeprom_word(uint16_t station_address,
                                      uint16_t word_address,
@@ -369,13 +459,73 @@ scan_status_t scan_read_eeprom_word(uint16_t station_address,
         return SCAN_STATUS_INVALID_PARAM;
     }
 
-    /* TODO: Implement SII EEPROM read via ESC registers using FPRD/FPWR */
-    (void)station_address;
-    (void)word_address;
-    (void)timeout_ms;
+    scan_status_t status;
 
-    *data = 0;
-    return SCAN_STATUS_ERROR;
+    /* Step 1: Write SII Address register */
+    uint8_t addr_bytes[2];
+    addr_bytes[0] = word_address & 0xFF;
+    addr_bytes[1] = (word_address >> 8) & 0xFF;
+
+    status = fpwr_register(station_address, ESC_REG_SII_ADDRESS, addr_bytes, 2, timeout_ms);
+    if (status != SCAN_STATUS_SUCCESS) {
+        return status;
+    }
+
+    /* Step 2: Write SII Control register to start read operation */
+    uint8_t ctrl_bytes[2];
+    ctrl_bytes[0] = (SII_CTRL_READ >> 0) & 0xFF;
+    ctrl_bytes[1] = (SII_CTRL_READ >> 8) & 0xFF;
+
+    status = fpwr_register(station_address, ESC_REG_SII_CONTROL, ctrl_bytes, 2, timeout_ms);
+    if (status != SCAN_STATUS_SUCCESS) {
+        return status;
+    }
+
+    /* Step 3: Poll SII Control register until BUSY bit is clear */
+    uint64_t start_time = hal_get_time_ms();
+
+    while (1) {
+        /* Check timeout */
+        if (timeout_ms > 0) {
+            uint64_t elapsed = hal_get_time_ms() - start_time;
+            if (elapsed >= timeout_ms) {
+                return SCAN_STATUS_TIMEOUT;
+            }
+        }
+
+        /* Read SII Control/Status register */
+        uint8_t status_bytes[2];
+        status = fprd_register(station_address, ESC_REG_SII_CONTROL, status_bytes, 2, timeout_ms);
+        if (status != SCAN_STATUS_SUCCESS) {
+            return status;
+        }
+
+        uint16_t sii_status = status_bytes[0] | (status_bytes[1] << 8);
+
+        /* Check for errors */
+        if (sii_status & SII_CTRL_ERROR_MASK) {
+            return SCAN_STATUS_EEPROM_ERROR;
+        }
+
+        /* Check if BUSY bit is clear */
+        if (!(sii_status & SII_CTRL_BUSY)) {
+            break;
+        }
+
+        hal_sleep_us(100);
+    }
+
+    /* Step 4: Read SII Data register */
+    uint8_t data_bytes[4];
+    status = fprd_register(station_address, ESC_REG_SII_DATA, data_bytes, 4, timeout_ms);
+    if (status != SCAN_STATUS_SUCCESS) {
+        return status;
+    }
+
+    /* Return first word (little-endian) */
+    *data = data_bytes[0] | (data_bytes[1] << 8);
+
+    return SCAN_STATUS_SUCCESS;
 }
 
 scan_status_t scan_read_slave_id(uint16_t station_address,
@@ -389,16 +539,54 @@ scan_status_t scan_read_slave_id(uint16_t station_address,
         return SCAN_STATUS_INVALID_PARAM;
     }
 
-    /* TODO: Implement using scan_read_eeprom_word */
-    (void)station_address;
-    (void)timeout_ms;
+    scan_status_t status;
+    uint16_t word_low, word_high;
 
-    if (vendor_id != NULL) *vendor_id = 0;
-    if (product_code != NULL) *product_code = 0;
-    if (revision != NULL) *revision = 0;
-    if (serial_number != NULL) *serial_number = 0;
+    /* Read Vendor ID (2 words at address 0x0008) */
+    if (vendor_id != NULL) {
+        status = scan_read_eeprom_word(station_address, SII_ADDR_VENDOR_ID, &word_low, timeout_ms);
+        if (status != SCAN_STATUS_SUCCESS) return status;
 
-    return SCAN_STATUS_ERROR;
+        status = scan_read_eeprom_word(station_address, SII_ADDR_VENDOR_ID + 1, &word_high, timeout_ms);
+        if (status != SCAN_STATUS_SUCCESS) return status;
+
+        *vendor_id = word_low | ((uint32_t)word_high << 16);
+    }
+
+    /* Read Product Code (2 words at address 0x000A) */
+    if (product_code != NULL) {
+        status = scan_read_eeprom_word(station_address, SII_ADDR_PRODUCT_CODE, &word_low, timeout_ms);
+        if (status != SCAN_STATUS_SUCCESS) return status;
+
+        status = scan_read_eeprom_word(station_address, SII_ADDR_PRODUCT_CODE + 1, &word_high, timeout_ms);
+        if (status != SCAN_STATUS_SUCCESS) return status;
+
+        *product_code = word_low | ((uint32_t)word_high << 16);
+    }
+
+    /* Read Revision (2 words at address 0x000C) */
+    if (revision != NULL) {
+        status = scan_read_eeprom_word(station_address, SII_ADDR_REVISION, &word_low, timeout_ms);
+        if (status != SCAN_STATUS_SUCCESS) return status;
+
+        status = scan_read_eeprom_word(station_address, SII_ADDR_REVISION + 1, &word_high, timeout_ms);
+        if (status != SCAN_STATUS_SUCCESS) return status;
+
+        *revision = word_low | ((uint32_t)word_high << 16);
+    }
+
+    /* Read Serial Number (2 words at address 0x000E) */
+    if (serial_number != NULL) {
+        status = scan_read_eeprom_word(station_address, SII_ADDR_SERIAL_NUMBER, &word_low, timeout_ms);
+        if (status != SCAN_STATUS_SUCCESS) return status;
+
+        status = scan_read_eeprom_word(station_address, SII_ADDR_SERIAL_NUMBER + 1, &word_high, timeout_ms);
+        if (status != SCAN_STATUS_SUCCESS) return status;
+
+        *serial_number = word_low | ((uint32_t)word_high << 16);
+    }
+
+    return SCAN_STATUS_SUCCESS;
 }
 
 scan_status_t scan_read_eeprom_category(uint16_t station_address,
@@ -412,14 +600,53 @@ scan_status_t scan_read_eeprom_category(uint16_t station_address,
         return SCAN_STATUS_INVALID_PARAM;
     }
 
-    /* TODO: Implement EEPROM category reading */
-    (void)station_address;
-    (void)category;
-    (void)buffer_size;
-    (void)timeout_ms;
-
+    /* Start reading from category start address */
+    uint16_t word_addr = SII_ADDR_CATEGORY_START;
     *bytes_read = 0;
-    return SCAN_STATUS_ERROR;
+
+    /* Search for category (max 256 words to prevent infinite loop) */
+    for (uint16_t i = 0; i < 256; i++) {
+        /* Read category header (type and size) */
+        uint16_t cat_type, cat_size;
+
+        scan_status_t status = scan_read_eeprom_word(station_address, word_addr, &cat_type, timeout_ms);
+        if (status != SCAN_STATUS_SUCCESS) return status;
+
+        status = scan_read_eeprom_word(station_address, word_addr + 1, &cat_size, timeout_ms);
+        if (status != SCAN_STATUS_SUCCESS) return status;
+
+        /* Check for end of categories */
+        if (cat_type == SII_CAT_END) {
+            return SCAN_STATUS_ERROR;  /* Category not found */
+        }
+
+        /* Check if this is the category we're looking for */
+        if (cat_type == category) {
+            /* Read category data */
+            uint16_t bytes_to_read = cat_size * 2;  /* Size is in words */
+            if (bytes_to_read > buffer_size) {
+                bytes_to_read = buffer_size;
+            }
+
+            /* Read data words */
+            for (uint16_t j = 0; j < bytes_to_read / 2; j++) {
+                uint16_t word;
+                status = scan_read_eeprom_word(station_address, word_addr + 2 + j, &word, timeout_ms);
+                if (status != SCAN_STATUS_SUCCESS) return status;
+
+                buffer[j * 2] = word & 0xFF;
+                buffer[j * 2 + 1] = (word >> 8) & 0xFF;
+            }
+
+            *bytes_read = bytes_to_read;
+            return SCAN_STATUS_SUCCESS;
+        }
+
+        /* Move to next category */
+        word_addr += 2 + cat_size;
+    }
+
+    return SCAN_STATUS_ERROR;  /* Category not found */
 }
 
 scan_status_t scan_read_slave_name(uint16_t station_address,
@@ -431,9 +658,60 @@ scan_status_t scan_read_slave_name(uint16_t station_address,
         return SCAN_STATUS_INVALID_PARAM;
     }
 
-    /* TODO: Implement slave name reading */
-    (void)station_address;
-    (void)timeout_ms;
+    /* Read GENERAL category to get name string index */
+    uint8_t general_data[128];
+    uint16_t bytes_read;
+
+    scan_status_t status = scan_read_eeprom_category(station_address, SII_CAT_GENERAL,
+                                                      general_data, sizeof(general_data),
+                                                      &bytes_read, timeout_ms);
+    if (status != SCAN_STATUS_SUCCESS) {
+        name[0] = '\0';
+        return status;
+    }
+
+    if (bytes_read < sizeof(sii_general_info_t)) {
+        name[0] = '\0';
+        return SCAN_STATUS_ERROR;
+    }
+
+    sii_general_info_t* general = (sii_general_info_t*)general_data;
+    uint8_t name_idx = general->name_idx;
+
+    if (name_idx == 0) {
+        name[0] = '\0';
+        return SCAN_STATUS_SUCCESS;
+    }
+
+    /* Read STRINGS category */
+    uint8_t strings_data[256];
+    status = scan_read_eeprom_category(station_address, SII_CAT_STRINGS,
+                                        strings_data, sizeof(strings_data),
+                                        &bytes_read, timeout_ms);
+    if (status != SCAN_STATUS_SUCCESS) {
+        name[0] = '\0';
+        return status;
+    }
+
+    /* Parse strings to find the name */
+    uint16_t offset = 0;
+    uint8_t current_idx = 1;
+
+    while (offset < bytes_read) {
+        uint8_t str_len = strings_data[offset];
+        if (str_len == 0) break;
+
+        if (current_idx == name_idx) {
+            /* Found the name string */
+            size_t copy_len = (str_len < name_size - 1) ? str_len : (name_size - 1);
+            memcpy(name, &strings_data[offset + 1], copy_len);
+            name[copy_len] = '\0';
+            return SCAN_STATUS_SUCCESS;
+        }
+
+        offset += str_len + 1;
+        current_idx++;
+    }
 
     name[0] = '\0';
     return SCAN_STATUS_ERROR;
