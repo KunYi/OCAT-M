@@ -76,6 +76,42 @@ sudo ./build/bin/process_data_demo eth1
 
 **Duration**: Runs for 10,000 cycles (10 seconds at 1kHz) or until Ctrl+C
 
+### 3. benchmark.c
+
+**Purpose**: Measures detailed performance metrics for the EtherCAT Master Stack.
+
+**Features**:
+- Multiple test configurations (1kHz, 2kHz, 4kHz, 10kHz)
+- Warmup phase before measurement
+- Detailed timing statistics (min/max/avg/jitter)
+- Latency measurement
+- Resource usage tracking (memory, CPU)
+- Throughput calculation
+- Success rate and error rate tracking
+
+**Usage**:
+```bash
+# Run benchmark with default interface (eth0)
+sudo ./build/bin/benchmark
+
+# Run with specific interface
+sudo ./build/bin/benchmark eth1
+```
+
+**Output**:
+- Test configuration details
+- Cycle statistics (successful, failed, WKC errors)
+- Timing statistics (min/max/avg cycle time, jitter, latency)
+- Performance metrics (frequency, throughput)
+- Resource usage (memory, CPU utilization)
+
+**Duration**: Runs 100,000 cycles per test configuration (approximately 5-10 minutes total)
+
+**Note**: For best results, run with real-time priority:
+```bash
+sudo chrt -f 80 ./build/bin/benchmark
+```
+
 ## Requirements
 
 ### Hardware

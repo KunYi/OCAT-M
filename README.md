@@ -289,8 +289,8 @@ Source Files:
   HAL:      3 files
   AL:       5 files
   Master:   5 files (master.c, scan.c, config.c, dc.c, process_data.c)
-  Examples: 2 files (simple_cyclic.c, process_data_demo.c)
-  Total:    24 library files + 2 example files
+  Examples: 3 files (simple_cyclic.c, process_data_demo.c, benchmark.c)
+  Total:    24 library files + 3 example files
 
 Lines of Code:
   DLL:      ~3,500 lines
@@ -298,14 +298,15 @@ Lines of Code:
   AL:       ~1,340 lines
   CoE:      ~753 lines
   Master:   ~3,028 lines (master.c 461 + scan.c 735 + config.c 668 + dc.c 694 + process_data.c 470)
-  Examples: ~830 lines (simple_cyclic.c 380 + process_data_demo.c 450)
-  Total:    ~10,251 lines
+  Examples: ~1,320 lines (simple_cyclic.c 380 + process_data_demo.c 450 + benchmark.c 490)
+  Total:    ~10,741 lines
 
 Build Status: ✅ Success (0 errors, 0 warnings)
 Output:
   Library:  build/lib/libethercat.a (498KB)
   Examples: build/bin/simple_cyclic (245KB)
             build/bin/process_data_demo (241KB)
+            build/bin/benchmark (249KB)
 ```
 
 ## Documentation
@@ -313,6 +314,7 @@ Output:
 - **CLAUDE.md** - Project guidance and development workflow
 - **Spec.md** - Technical specification (complete for Phase 1-2)
 - **Plan.md** - Implementation plan (5 phases with milestones)
+- **TESTING.md** - Testing and benchmarking guide
 
 ## Project Structure
 
@@ -394,7 +396,8 @@ ethercat-master/
 └── examples/                    # Example applications
     ├── README.md                # Example documentation
     ├── simple_cyclic.c          # Simple cyclic I/O example
-    └── process_data_demo.c      # Process data demonstration
+    ├── process_data_demo.c      # Process data demonstration
+    └── benchmark.c              # Performance benchmark tool
 ```
 
 ## Building
@@ -454,10 +457,12 @@ make info
 ### Phase 5.3 - Examples and Testing ✅ Complete
 - ✅ Simple cyclic I/O example (simple_cyclic.c - 380 lines)
 - ✅ Process data demonstration (process_data_demo.c - 450 lines)
+- ✅ Performance benchmark tool (benchmark.c - 490 lines)
 - ✅ Example documentation (examples/README.md)
+- ✅ Testing documentation (TESTING.md)
 - ✅ Build integration (Makefile)
-- ⏳ Performance benchmarks (TODO - optional)
-- ⏳ System testing with real hardware (TODO - optional)
+- ✅ Performance benchmarks documented
+- ⏳ System testing with real hardware (TODO - requires hardware)
 
 ### Phase 3 - Remaining Application Layer Protocols (All Optional)
 
