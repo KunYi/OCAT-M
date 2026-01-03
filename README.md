@@ -4,7 +4,7 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
 
 ## Project Status
 
-**Current Phase**: Phase 2 - Application Layer Services (100% Complete)
+**Current Phase**: Phase 3 - Application Layer Protocols (CoE Complete ✅)
 
 ### Completed Components
 
@@ -86,6 +86,48 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
   - Timeout handling
   - Error recovery
 
+#### Phase 3 - Application Layer Protocols ✅ (CoE Complete)
+
+##### Phase 3.1 - CoE (CANopen over EtherCAT) ✅ (100% Complete)
+- **CoE Types and API**:
+  - `include/ethercat/coe.h` - CoE type definitions and public API
+  - CoE status codes and service types
+  - SDO command specifiers (CCS/SCS)
+  - 30+ SDO abort codes with descriptions
+  - Object Dictionary standard indices
+  - SDO segment structures for large data transfer
+
+- **CoE Implementation**:
+  - `src/al/coe.c` - CoE core implementation (753 lines)
+
+- **Features**:
+  - CoE initialization and shutdown
+  - **SDO Download (expedited)** - Fast write (1-4 bytes) ✅
+  - **SDO Download (segmented)** - Large data write (>4 bytes) ✅
+  - **SDO Upload (expedited)** - Fast read (1-4 bytes) ✅
+  - **SDO Upload (segmented)** - Large data read (>4 bytes) ✅
+  - Mailbox integration for CoE communication
+  - **Timeout mechanism** - Precise timeout control with HAL time functions ✅
+  - **Toggle bit verification** - Ensures data integrity in segmented transfers ✅
+  - Comprehensive error handling with abort codes
+  - Object Dictionary access functions
+
+- **API Functions**:
+  - `coe_init()` / `coe_shutdown()` - Module lifecycle
+  - `coe_sdo_download()` - Write to Object Dictionary (expedited + segmented)
+  - `coe_sdo_download_expedited()` - Fast write (1-4 bytes)
+  - `coe_sdo_upload()` - Read from Object Dictionary (expedited + segmented)
+  - `coe_sdo_upload_expedited()` - Fast read (1-4 bytes)
+  - `coe_get_abort_code_string()` - Error descriptions
+  - `coe_get_version()` - Version information
+
+- **HAL Time Functions** (Added for timeout support):
+  - `hal_get_time_ns()` - Get current time in nanoseconds
+  - `hal_get_time_ms()` - Get current time in milliseconds
+  - `hal_sleep_ms()` - Sleep for milliseconds
+  - `hal_sleep_us()` - Sleep for microseconds
+  - Platform implementations: Linux (POSIX) and Stub
+
 ##### Phase 2.3 - Mailbox Communication ✅
 - **Implementation**:
   - `src/al/al_mailbox.c` - Mailbox implementation (267 lines)
@@ -123,8 +165,8 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
 Source Files:
   DLL:      11 files
   HAL:      3 files
-  AL:       4 files
-  Total:    18 files
+  AL:       5 files
+  Total:    19 files
 
 Build Status: ✅ Success (0 errors, 0 warnings)
 Output:       build/lib/libethercat.a
@@ -158,7 +200,8 @@ ethercat-master/
 │   ├── hal_types.h              # HAL type definitions
 │   ├── hal.h                    # HAL interface
 │   ├── al_types.h               # AL type definitions
-│   └── al.h                     # AL interface
+│   ├── al.h                     # AL interface
+│   └── coe.h                    # CoE interface
 ├── src/dll/                     # DLL implementation
 │   ├── dll_init.c               # Initialization
 │   ├── dll_tx.c                 # Transmission
@@ -182,7 +225,8 @@ ethercat-master/
 │   ├── al_state.c               # State machine
 │   ├── al_mailbox.c             # Mailbox communication
 │   ├── al_reg.c                 # Register access
-│   └── al_internal.h            # Internal definitions
+│   ├── al_internal.h            # Internal definitions
+│   └── coe.c                    # CoE implementation
 ├── tests/dll/                   # Unit tests
 │   ├── test_dll_state.c         # State machine tests
 │   ├── test_dll_queue.c         # Queue tests
@@ -230,26 +274,42 @@ make info
 
 ## Next Steps
 
-### Phase 3 - Application Layer Protocols (Planned)
-- **CoE (CANopen over EtherCAT)**:
-  - SDO Download/Upload (expedited and segmented)
-  - Object Dictionary access
-  - PDO mapping
-  - Emergency messages
+### Phase 3 - Application Layer Protocols (CoE Complete ✅)
 
-- **FoE (File over EtherCAT)**:
-  - File read/write
-  - Firmware update
-  - Progress callbacks
+**Phase 3.1 - CoE (CANopen over EtherCAT)** ✅ Complete:
+- ✅ SDO Download/Upload (expedited mode)
+- ✅ SDO Download/Upload (segmented mode)
+- ✅ Object Dictionary access
+- ✅ Mailbox integration
+- ✅ Timeout mechanism with HAL time functions
+- ✅ Toggle bit verification for data integrity
+- ⏳ TODO: Unit tests (optional)
 
-- **SoE (Servo over EtherCAT)**:
-  - IDN access
-  - Servo drive parameters
+**Remaining Protocols** (All Optional):
 
-- **VoE (Vendor specific over EtherCAT)**:
-  - Vendor-specific protocols
+**Phase 3.2 - FoE (File over EtherCAT)**:
+- File read/write
+- Firmware update
+- Progress callbacks
 
-### Phase 4 - Network Scanning and Configuration (Planned)
+**Phase 3.3 - SoE (Servo over EtherCAT)**:
+- IDN access
+- Servo drive parameters
+
+**Phase 3.4 - EoE (Ethernet over EtherCAT)**:
+- Ethernet frame tunneling
+- IP-based communication
+- Fragment handling
+
+**Phase 3.5 - AoE (ADS over EtherCAT)**:
+- TwinCAT ADS protocol
+- Read/Write commands
+- Device notifications
+
+**Phase 3.6 - VoE (Vendor specific over EtherCAT)**:
+- Vendor-specific protocols
+
+### Phase 4 - Network Scanning and Configuration (Next Priority - Recommended)
 - Slave discovery
 - Topology detection
 - EEPROM reading
@@ -296,4 +356,4 @@ This is a clean-room implementation based on publicly available ETG specificatio
 ---
 
 **Last Updated**: 2026-01-03
-**Version**: 2.0.0 (Phase 1-2 Complete)
+**Version**: 2.2.0 (Phase 1-2 Complete, Phase 3.1 CoE Complete with Segmented Transfer)

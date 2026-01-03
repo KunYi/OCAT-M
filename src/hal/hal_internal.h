@@ -51,6 +51,10 @@ typedef struct {
     hal_status_t (*set_promiscuous_mode)(hal_context_t* ctx, bool enable);
     hal_status_t (*flush_tx_buffers)(hal_context_t* ctx);
     hal_status_t (*flush_rx_buffers)(hal_context_t* ctx);
+    uint64_t (*get_time_ns)(void);
+    uint64_t (*get_time_ms)(void);
+    void (*sleep_ms)(uint32_t ms);
+    void (*sleep_us)(uint32_t us);
 } hal_platform_ops_t;
 
 /* Forward declarations for platform implementations */

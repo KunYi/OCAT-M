@@ -252,6 +252,48 @@ hal_status_t hal_flush_tx_buffers(void);
 hal_status_t hal_flush_rx_buffers(void);
 
 /* ========================================================================== */
+/* HAL Time Functions                                                         */
+/* ========================================================================== */
+
+/**
+ * @brief Get current time in nanoseconds
+ *
+ * This function returns the current system time in nanoseconds.
+ * The time is monotonic and suitable for measuring time intervals.
+ *
+ * @return Current time in nanoseconds
+ */
+uint64_t hal_get_time_ns(void);
+
+/**
+ * @brief Get current time in milliseconds
+ *
+ * This function returns the current system time in milliseconds.
+ * The time is monotonic and suitable for measuring time intervals.
+ *
+ * @return Current time in milliseconds
+ */
+uint64_t hal_get_time_ms(void);
+
+/**
+ * @brief Sleep for specified milliseconds
+ *
+ * This function suspends execution for the specified number of milliseconds.
+ *
+ * @param ms Number of milliseconds to sleep
+ */
+void hal_sleep_ms(uint32_t ms);
+
+/**
+ * @brief Sleep for specified microseconds
+ *
+ * This function suspends execution for the specified number of microseconds.
+ *
+ * @param us Number of microseconds to sleep
+ */
+void hal_sleep_us(uint32_t us);
+
+/* ========================================================================== */
 /* HAL Platform-Specific Functions                                           */
 /* ========================================================================== */
 

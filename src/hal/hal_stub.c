@@ -12,6 +12,7 @@
 #include "hal_internal.h"
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 
 /* ========================================================================== */
 /* Stub Platform Context                                                      */
@@ -252,6 +253,40 @@ static hal_status_t hal_stub_flush_rx_buffers(hal_context_t* ctx)
 }
 
 /* ========================================================================== */
+/* Stub Time Functions                                                        */
+/* ========================================================================== */
+
+static uint64_t hal_stub_get_time_ns(void)
+{
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        return 0;
+    }
+    return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+}
+
+static uint64_t hal_stub_get_time_ms(void)
+{
+    return hal_stub_get_time_ns() / 1000000ULL;
+}
+
+static void hal_stub_sleep_ms(uint32_t ms)
+{
+    struct timespec ts;
+    ts.tv_sec = ms / 1000;
+    ts.tv_nsec = (ms % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+}
+
+static void hal_stub_sleep_us(uint32_t us)
+{
+    struct timespec ts;
+    ts.tv_sec = us / 1000000;
+    ts.tv_nsec = (us % 1000000) * 1000;
+    nanosleep(&ts, NULL);
+}
+
+/* ========================================================================== */
 /* Stub Platform Operations Table                                             */
 /* ========================================================================== */
 
@@ -266,5 +301,9 @@ const hal_platform_ops_t hal_stub_ops = {
     .get_device_info = hal_stub_get_device_info,
     .set_promiscuous_mode = hal_stub_set_promiscuous_mode,
     .flush_tx_buffers = hal_stub_flush_tx_buffers,
-    .flush_rx_buffers = hal_stub_flush_rx_buffers
+    .flush_rx_buffers = hal_stub_flush_rx_buffers,
+    .get_time_ns = hal_stub_get_time_ns,
+    .get_time_ms = hal_stub_get_time_ms,
+    .sleep_ms = hal_stub_sleep_ms,
+    .sleep_us = hal_stub_sleep_us
 };

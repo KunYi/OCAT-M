@@ -431,3 +431,63 @@ const char* hal_get_version(void)
 {
     return "1.0.0";
 }
+
+/* ========================================================================== */
+/* HAL Time Functions                                                         */
+/* ========================================================================== */
+
+uint64_t hal_get_time_ns(void)
+{
+    if (!g_hal_context.initialized) {
+        return 0;
+    }
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    if (ops == NULL || ops->get_time_ns == NULL) {
+        return 0;
+    }
+
+    return ops->get_time_ns();
+}
+
+uint64_t hal_get_time_ms(void)
+{
+    if (!g_hal_context.initialized) {
+        return 0;
+    }
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    if (ops == NULL || ops->get_time_ms == NULL) {
+        return 0;
+    }
+
+    return ops->get_time_ms();
+}
+
+void hal_sleep_ms(uint32_t ms)
+{
+    if (!g_hal_context.initialized) {
+        return;
+    }
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    if (ops == NULL || ops->sleep_ms == NULL) {
+        return;
+    }
+
+    ops->sleep_ms(ms);
+}
+
+void hal_sleep_us(uint32_t us)
+{
+    if (!g_hal_context.initialized) {
+        return;
+    }
+
+    const hal_platform_ops_t* ops = hal_get_platform_ops(g_hal_context.config.platform);
+    if (ops == NULL || ops->sleep_us == NULL) {
+        return;
+    }
+
+    ops->sleep_us(us);
+}
