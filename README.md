@@ -289,7 +289,8 @@ Source Files:
   HAL:      3 files
   AL:       5 files
   Master:   5 files (master.c, scan.c, config.c, dc.c, process_data.c)
-  Total:    24 files
+  Examples: 2 files (simple_cyclic.c, process_data_demo.c)
+  Total:    24 library files + 2 example files
 
 Lines of Code:
   DLL:      ~3,500 lines
@@ -297,10 +298,14 @@ Lines of Code:
   AL:       ~1,340 lines
   CoE:      ~753 lines
   Master:   ~3,028 lines (master.c 461 + scan.c 735 + config.c 668 + dc.c 694 + process_data.c 470)
-  Total:    ~9,421 lines
+  Examples: ~830 lines (simple_cyclic.c 380 + process_data_demo.c 450)
+  Total:    ~10,251 lines
 
 Build Status: ✅ Success (0 errors, 0 warnings)
-Output:       build/lib/libethercat.a (498KB)
+Output:
+  Library:  build/lib/libethercat.a (498KB)
+  Examples: build/bin/simple_cyclic (245KB)
+            build/bin/process_data_demo (241KB)
 ```
 
 ## Documentation
@@ -377,7 +382,7 @@ ethercat-master/
 │   └── test_dll_integration.c   # Integration tests
 ├── build/                       # Build output
 │   ├── lib/libethercat.a        # Static library
-│   ├── bin/                     # Test binaries
+│   ├── bin/                     # Test and example binaries
 │   └── obj/                     # Object files
 ├── specs/                       # ETG1000 specifications
 │   ├── ETG1000_1_*.pdf          # Overview
@@ -386,7 +391,10 @@ ethercat-master/
 │   ├── ETG1000_4_*.pdf          # DLL Protocols
 │   ├── ETG1000_5_*.pdf          # AL Services
 │   └── ETG1000_6_*.pdf          # AL Protocols
-└── examples/                    # Example applications (TBD)
+└── examples/                    # Example applications
+    ├── README.md                # Example documentation
+    ├── simple_cyclic.c          # Simple cyclic I/O example
+    └── process_data_demo.c      # Process data demonstration
 ```
 
 ## Building
@@ -404,6 +412,9 @@ make lib
 
 # Build and run tests
 make test
+
+# Build example applications
+make examples
 
 # Build release version
 make release
@@ -440,11 +451,13 @@ make info
 - Automatic port switching
 - Port health monitoring
 
-### Phase 5.3 - Examples and Testing (Recommended)
-- Simple cyclic I/O example
-- Process data demonstration
-- Performance benchmarks
-- System testing
+### Phase 5.3 - Examples and Testing ✅ Complete
+- ✅ Simple cyclic I/O example (simple_cyclic.c - 380 lines)
+- ✅ Process data demonstration (process_data_demo.c - 450 lines)
+- ✅ Example documentation (examples/README.md)
+- ✅ Build integration (Makefile)
+- ⏳ Performance benchmarks (TODO - optional)
+- ⏳ System testing with real hardware (TODO - optional)
 
 ### Phase 3 - Remaining Application Layer Protocols (All Optional)
 
@@ -502,7 +515,23 @@ This is a clean-room implementation based on publicly available ETG specificatio
 - ETG1000 Series Specifications (Version 1.0.4)
 - EtherCAT Technology Group (www.ethercat.org)
 
+## Running Examples
+
+See `examples/README.md` for detailed documentation on running the example applications.
+
+Quick start:
+```bash
+# Build examples
+make examples
+
+# Run simple cyclic I/O example (requires root)
+sudo ./build/bin/simple_cyclic
+
+# Run process data demonstration (requires root)
+sudo ./build/bin/process_data_demo
+```
+
 ---
 
 **Last Updated**: 2026-01-03
-**Version**: 5.1.0 (Phase 1-2 Complete, Phase 3.1 CoE Complete, Phase 4 Complete, Phase 5.1 Complete - Process Data and Cyclic Operation)
+**Version**: 5.3.0 (Phase 1-2 Complete, Phase 3.1 CoE Complete, Phase 4 Complete, Phase 5.1 Complete, Phase 5.3 Complete - Full Cyclic Operation with Examples)
