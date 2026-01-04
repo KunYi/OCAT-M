@@ -1792,6 +1792,8 @@ coe_status_t coe_sdo_upload_expedited(uint16_t slave_address,
 
 FoE provides file transfer capabilities for firmware updates and data exchange.
 
+**Implementation Status**: ✅ Complete (712 lines in foe.c, 293 lines in foe.h)
+
 #### 4.2.1 FoE OpCodes
 
 ```c
@@ -1799,12 +1801,12 @@ FoE provides file transfer capabilities for firmware updates and data exchange.
  * @brief FoE operation codes
  */
 typedef enum {
-    FOE_OPCODE_READ = 0x01,             /**< Read file */
-    FOE_OPCODE_WRITE = 0x02,            /**< Write file */
+    FOE_OPCODE_READ = 0x01,             /**< Read file from slave */
+    FOE_OPCODE_WRITE = 0x02,            /**< Write file to slave */
     FOE_OPCODE_DATA = 0x03,             /**< Data packet */
     FOE_OPCODE_ACK = 0x04,              /**< Acknowledge */
-    FOE_OPCODE_ERROR = 0x05,            /**< Error */
-    FOE_OPCODE_BUSY = 0x06              /**< Busy */
+    FOE_OPCODE_ERROR = 0x05,            /**< Error response */
+    FOE_OPCODE_BUSY = 0x06              /**< Busy response */
 } foe_opcode_t;
 ```
 
@@ -1812,14 +1814,16 @@ typedef enum {
 
 ```c
 /**
- * @brief FoE header structure
+ * @brief FoE header structure (6 bytes)
  */
 typedef struct __attribute__((packed)) {
     uint8_t opcode;                     /**< FoE operation code */
-    uint8_t reserved;                   /**< Reserved */
-    uint32_t packet_number;             /**< Packet number (for DATA/ACK) */
-    uint32_t error_code;                /**< Error code (for ERROR) */
-    uint8_t data[];                     /**< Data or filename */
+    uint8_t reserved;                   /**< Reserved (must be 0) */
+    union {
+        uint32_t packet_number;         /**< Packet number (for DATA/ACK) */
+        uint32_t error_code;            /**< Error code (for ERROR) */
+        uint32_t password;              /**< Password (for READ/WRITE) */
+    };
 } foe_header_t;
 
 #define FOE_HEADER_SIZE 6
@@ -1829,85 +1833,265 @@ typedef struct __attribute__((packed)) {
 
 ```c
 /**
- * @brief FoE error codes
+ * @brief FoE error codes (as defined in ETG1000.6)
  */
 typedef enum {
-    FOE_ERROR_NOT_DEFINED = 0x8000,
-    FOE_ERROR_NOT_FOUND = 0x8001,
-    FOE_ERROR_ACCESS_DENIED = 0x8002,
-    FOE_ERROR_DISK_FULL = 0x8003,
-    FOE_ERROR_ILLEGAL = 0x8004,
-    FOE_ERROR_PACKET_NUMBER = 0x8005,
-    FOE_ERROR_ALREADY_EXISTS = 0x8006,
-    FOE_ERROR_NO_USER = 0x8007,
-    FOE_ERROR_BOOTSTRAP_ONLY = 0x8008,
-    FOE_ERROR_NOT_BOOTSTRAP = 0x8009,
-    FOE_ERROR_NO_RIGHTS = 0x800A,
-    FOE_ERROR_PROGRAM_ERROR = 0x800B
+    FOE_ERROR_NOT_DEFINED = 0x8000,         /**< Not defined */
+    FOE_ERROR_NOT_FOUND = 0x8001,           /**< File not found */
+    FOE_ERROR_ACCESS_DENIED = 0x8002,       /**< Access denied */
+    FOE_ERROR_DISK_FULL = 0x8003,           /**< Disk full */
+    FOE_ERROR_ILLEGAL = 0x8004,             /**< Illegal operation */
+    FOE_ERROR_PACKET_NUMBER = 0x8005,       /**< Packet number error */
+    FOE_ERROR_ALREADY_EXISTS = 0x8006,      /**< File already exists */
+    FOE_ERROR_NO_USER = 0x8007,             /**< No user */
+    FOE_ERROR_BOOTSTRAP_ONLY = 0x8008,      /**< Bootstrap mode only */
+    FOE_ERROR_NOT_BOOTSTRAP = 0x8009,       /**< Not in bootstrap mode */
+    FOE_ERROR_NO_RIGHTS = 0x800A,           /**< No rights */
+    FOE_ERROR_PROGRAM_ERROR = 0x800B        /**< Program error */
 } foe_error_code_t;
 ```
 
-#### 4.2.4 FoE Service Functions
+#### 4.2.4 FoE Status Codes
 
 ```c
 /**
  * @brief FoE status codes
  */
 typedef enum {
-    FOE_STATUS_SUCCESS = 0x00,
-    FOE_STATUS_ERROR = 0x01,
-    FOE_STATUS_TIMEOUT = 0x02,
-    FOE_STATUS_BUSY = 0x03,
-    FOE_STATUS_INVALID_PARAM = 0x04
+    FOE_STATUS_SUCCESS = 0x00,          /**< Operation successful */
+    FOE_STATUS_ERROR = 0x01,            /**< General error */
+    FOE_STATUS_TIMEOUT = 0x02,          /**< Operation timeout */
+    FOE_STATUS_BUSY = 0x03,             /**< Slave is busy */
+    FOE_STATUS_INVALID_PARAM = 0x04,    /**< Invalid parameter */
+    FOE_STATUS_NOT_SUPPORTED = 0x05,    /**< FoE not supported by slave */
+    FOE_STATUS_ABORTED = 0x06,          /**< Transfer aborted */
+    FOE_STATUS_MAILBOX_ERROR = 0x07     /**< Mailbox communication error */
 } foe_status_t;
+```
 
+#### 4.2.5 FoE Progress Callback
+
+```c
+/**
+ * @brief FoE transfer progress callback
+ *
+ * @param bytes_transferred Number of bytes transferred so far
+ * @param total_bytes Total number of bytes to transfer
+ * @param user_data User-provided context pointer
+ */
+typedef void (*foe_progress_callback_t)(uint32_t bytes_transferred,
+                                        uint32_t total_bytes,
+                                        void* user_data);
+```
+
+#### 4.2.6 FoE Service Functions
+
+```c
 /**
  * @brief FoE Read file from slave
  *
- * @param slave_address Slave station address
- * @param filename Filename to read
- * @param data Buffer for file data
- * @param size Pointer to buffer size (in: max, out: actual)
- * @param timeout_ms Timeout in milliseconds
+ * This function reads a file from the slave device using the FoE protocol.
+ * The slave must be in Pre-Operational or Bootstrap state.
+ *
+ * @param slave_address Slave station address (0x1000+)
+ * @param filename Filename to read (null-terminated string)
+ * @param data Buffer to receive file data
+ * @param size Pointer to buffer size (in: max size, out: actual size)
+ * @param timeout_ms Timeout in milliseconds (0 = use default)
+ * @param progress_callback Optional progress callback (can be NULL)
+ * @param user_data User data passed to progress callback
  * @return FOE_STATUS_SUCCESS on success, error code otherwise
  */
 foe_status_t foe_read(uint16_t slave_address,
                       const char* filename,
                       uint8_t* data,
                       uint32_t* size,
-                      uint32_t timeout_ms);
+                      uint32_t timeout_ms,
+                      foe_progress_callback_t progress_callback,
+                      void* user_data);
 
 /**
  * @brief FoE Write file to slave
  *
- * @param slave_address Slave station address
- * @param filename Filename to write
- * @param data File data
+ * This function writes a file to the slave device using the FoE protocol.
+ * The slave must be in Pre-Operational or Bootstrap state.
+ *
+ * @param slave_address Slave station address (0x1000+)
+ * @param filename Filename to write (null-terminated string)
+ * @param data File data to write
  * @param size File size in bytes
- * @param timeout_ms Timeout in milliseconds
+ * @param timeout_ms Timeout in milliseconds (0 = use default)
+ * @param progress_callback Optional progress callback (can be NULL)
+ * @param user_data User data passed to progress callback
  * @return FOE_STATUS_SUCCESS on success, error code otherwise
  */
 foe_status_t foe_write(uint16_t slave_address,
                        const char* filename,
                        const uint8_t* data,
                        uint32_t size,
-                       uint32_t timeout_ms);
+                       uint32_t timeout_ms,
+                       foe_progress_callback_t progress_callback,
+                       void* user_data);
 
 /**
- * @brief FoE firmware update
+ * @brief Perform firmware update on slave
  *
- * @param slave_address Slave station address
+ * This is a convenience function that performs a complete firmware update:
+ * 1. Transitions slave to Bootstrap state
+ * 2. Writes firmware file using FoE
+ * 3. Transitions slave back to Init state
+ * 4. Waits for slave to restart
+ *
+ * @param slave_address Slave station address (0x1000+)
  * @param firmware_data Firmware binary data
  * @param firmware_size Firmware size in bytes
- * @param progress_callback Progress callback function (optional)
- * @param timeout_ms Timeout in milliseconds
+ * @param progress_callback Optional progress callback (can be NULL)
+ * @param user_data User data passed to progress callback
+ * @param timeout_ms Total timeout in milliseconds (0 = use default)
  * @return FOE_STATUS_SUCCESS on success, error code otherwise
  */
 foe_status_t foe_firmware_update(uint16_t slave_address,
                                   const uint8_t* firmware_data,
                                   uint32_t firmware_size,
-                                  void (*progress_callback)(uint32_t bytes_sent, uint32_t total_bytes),
+                                  foe_progress_callback_t progress_callback,
+                                  void* user_data,
                                   uint32_t timeout_ms);
+
+/**
+ * @brief Perform firmware update with custom filename
+ *
+ * Same as foe_firmware_update() but allows specifying a custom filename.
+ *
+ * @param slave_address Slave station address (0x1000+)
+ * @param filename Firmware filename (null-terminated string)
+ * @param firmware_data Firmware binary data
+ * @param firmware_size Firmware size in bytes
+ * @param progress_callback Optional progress callback (can be NULL)
+ * @param user_data User data passed to progress callback
+ * @param timeout_ms Total timeout in milliseconds (0 = use default)
+ * @return FOE_STATUS_SUCCESS on success, error code otherwise
+ */
+foe_status_t foe_firmware_update_ex(uint16_t slave_address,
+                                     const char* filename,
+                                     const uint8_t* firmware_data,
+                                     uint32_t firmware_size,
+                                     foe_progress_callback_t progress_callback,
+                                     void* user_data,
+                                     uint32_t timeout_ms);
+```
+
+#### 4.2.7 FoE Utility Functions
+
+```c
+/**
+ * @brief Get FoE error code description
+ *
+ * @param error_code FoE error code
+ * @return Pointer to error description string (static storage)
+ */
+const char* foe_get_error_string(foe_error_code_t error_code);
+
+/**
+ * @brief Get FoE status description
+ *
+ * @param status FoE status code
+ * @return Pointer to status description string (static storage)
+ */
+const char* foe_get_status_string(foe_status_t status);
+
+/**
+ * @brief Get FoE opcode name
+ *
+ * @param opcode FoE operation code
+ * @return Pointer to opcode name string (static storage)
+ */
+const char* foe_get_opcode_name(foe_opcode_t opcode);
+
+/**
+ * @brief Check if slave supports FoE protocol
+ *
+ * This function checks the slave's mailbox protocol support to determine
+ * if FoE is available.
+ *
+ * @param slave_address Slave station address (0x1000+)
+ * @param supported Pointer to receive support flag
+ * @return FOE_STATUS_SUCCESS on success, error code otherwise
+ */
+foe_status_t foe_check_support(uint16_t slave_address, bool* supported);
+```
+
+#### 4.2.8 FoE Constants
+
+```c
+#define FOE_HEADER_SIZE             6       /**< FoE header size in bytes */
+#define FOE_MAX_DATA_SIZE           512     /**< Maximum data per packet */
+#define FOE_DEFAULT_TIMEOUT_MS      5000    /**< Default transfer timeout */
+#define FOE_PACKET_TIMEOUT_MS       1000    /**< Per-packet timeout */
+#define FOE_BUSY_RETRY_MS           100     /**< Retry delay when busy */
+#define FOE_MAX_BUSY_RETRIES        50      /**< Maximum busy retries */
+#define FOE_MAX_FILENAME_LENGTH     256     /**< Maximum filename length */
+```
+
+#### 4.2.9 FoE Transfer Protocol
+
+**File Read Sequence**:
+```
+Master                          Slave
+  |                               |
+  |--- READ Request (filename) -->|
+  |                               |
+  |<-- DATA Packet #1 ------------|
+  |--- ACK #1 ------------------->|
+  |                               |
+  |<-- DATA Packet #2 ------------|
+  |--- ACK #2 ------------------->|
+  |                               |
+  |<-- DATA Packet #N (last) -----|
+  |--- ACK #N ------------------->|
+  |                               |
+```
+
+**File Write Sequence**:
+```
+Master                          Slave
+  |                               |
+  |--- WRITE Request (filename) ->|
+  |<-- ACK #0 --------------------|
+  |                               |
+  |--- DATA Packet #1 ----------->|
+  |<-- ACK #1 --------------------|
+  |                               |
+  |--- DATA Packet #2 ----------->|
+  |<-- ACK #2 --------------------|
+  |                               |
+  |--- DATA Packet #N (last) ---->|
+  |<-- ACK #N --------------------|
+  |                               |
+```
+
+**BUSY Handling**:
+```
+Master                          Slave
+  |                               |
+  |--- DATA Packet #N ----------->|
+  |<-- BUSY -----------------------|
+  |                               |
+  [Wait FOE_BUSY_RETRY_MS]
+  |                               |
+  |--- DATA Packet #N (retry) --->|
+  |<-- ACK #N --------------------|
+  |                               |
+```
+
+#### 4.2.10 FoE Implementation Notes
+
+1. **Packet Numbering**: Starts at 1 for first data packet, increments for each packet
+2. **Last Packet Detection**: Packet with size < FOE_MAX_DATA_SIZE indicates last packet
+3. **BUSY Response**: Slave may respond with BUSY, master should retry after delay
+4. **Timeout Handling**: Each packet has individual timeout, plus overall transfer timeout
+5. **Bootstrap Mode**: Firmware updates require slave to be in Bootstrap state
+6. **Mailbox Integration**: FoE uses mailbox type MBOX_TYPE_FOE (0x04)
+7. **Progress Tracking**: Optional callback provides real-time transfer progress
 ```
 
 ### 4.3 Servo over EtherCAT (SoE)
@@ -2892,4 +3076,5 @@ hal_status_t hal_get_port_statistics(hal_port_t port, hal_statistics_t* stats);
 | 2.0.0 | 2026-01-03 | Claude Code | Added AL Services (ETG1000_5) - State machine, mailbox, sync manager |
 | 2.1.0 | 2026-01-03 | Claude Code | Added AL Protocols (ETG1000_6) - CoE, FoE, SoE, VoE, EoE, AoE |
 | 3.0.0 | 2026-01-03 | Claude Code | Added Process Data and Cyclic Operation with Redundancy Support |
+| 3.1.0 | 2026-01-04 | Claude Code | Updated FoE specification with complete implementation details (712 lines) |
 

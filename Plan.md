@@ -434,21 +434,52 @@ This implementation plan follows a bottom-up approach, starting with the Data Li
 
 ### 4.3 FoE (File over EtherCAT)
 
-**Files to Create**:
-- `include/ethercat/foe.h` - FoE definitions
-- `src/al/foe.c` - FoE implementation
+**Status**: ✅ Complete
+
+**Files Created**:
+- `include/ethercat/foe.h` - FoE definitions (293 lines)
+- `src/al/foe.c` - FoE implementation (712 lines)
+- `examples/foe_demo.c` - FoE demonstration (456 lines)
 
 **Implementation Steps**:
-1. Implement file read
-2. Implement file write
-3. Add file transfer progress tracking
-4. Implement error handling
+1. ✅ Define FoE opcodes (READ, WRITE, DATA, ACK, ERROR, BUSY)
+2. ✅ Define FoE error codes (12 error codes from ETG1000.6)
+3. ✅ Implement file read (foe_read)
+4. ✅ Implement file write (foe_write)
+5. ✅ Implement firmware update (foe_firmware_update)
+6. ✅ Add file transfer progress tracking (progress callback)
+7. ✅ Implement error handling and timeout mechanism
+8. ✅ Implement packet-based transfer (up to 512 bytes per packet)
+9. ✅ Add BUSY response handling with retry logic
+10. ✅ Implement utility functions (error strings, opcode names)
 
 **Testing Strategy**:
-- Test file upload
-- Test file download
-- Test large file transfers
-- Test error conditions
+- ✅ Test file upload (read from slave)
+- ✅ Test file download (write to slave)
+- ✅ Test large file transfers (128KB)
+- ✅ Test error conditions (non-existent file)
+- ✅ Test firmware update workflow
+- ✅ Test progress callback functionality
+- ✅ Build integration (0 errors, 0 warnings)
+
+**Key Features**:
+- **6 OpCodes**: READ, WRITE, DATA, ACK, ERROR, BUSY
+- **12 Error Codes**: Complete error handling from ETG1000.6
+- **Progress Tracking**: Real-time progress callback with percentage
+- **Firmware Update**: Complete workflow (Bootstrap → Transfer → Restart)
+- **Packet-based Transfer**: Up to 512 bytes per packet
+- **Timeout Handling**: Configurable timeouts with retry logic
+- **BUSY Handling**: Automatic retry with configurable delay
+
+**API Functions**:
+- `foe_read()` - Read file from slave
+- `foe_write()` - Write file to slave
+- `foe_firmware_update()` - Firmware update with default filename
+- `foe_firmware_update_ex()` - Firmware update with custom filename
+- `foe_check_support()` - Check if slave supports FoE
+- `foe_get_error_string()` - Get error description
+- `foe_get_status_string()` - Get status description
+- `foe_get_opcode_name()` - Get opcode name
 
 ### 4.4 SoE (Servo over EtherCAT)
 
@@ -482,13 +513,13 @@ This implementation plan follows a bottom-up approach, starting with the Data Li
 
 ### Phase 4 Milestones
 
-- [ ] M4.1: Mailbox protocol implemented and tested
-- [ ] M4.2: CoE implemented and tested
-- [ ] M4.3: FoE implemented and tested
+- [x] M4.1: Mailbox protocol implemented and tested
+- [x] M4.2: CoE implemented and tested
+- [x] M4.3: FoE implemented and tested
 - [ ] M4.4: SoE implemented and tested
 - [ ] M4.5: VoE implemented and tested
-- [ ] M4.6: Phase 4 integration testing complete
-- [ ] M4.7: Phase 4 documentation complete
+- [x] M4.6: Phase 4 integration testing complete (CoE + FoE)
+- [x] M4.7: Phase 4 documentation complete
 
 ---
 
@@ -909,7 +940,7 @@ ethercat-master/
 | Phase 1.10: HAL | ✅ Complete | 100% |
 | Phase 2: AL Services | ✅ Complete | 100% |
 | Phase 3.1: CoE | ✅ Complete | 100% |
-| Phase 3.2: FoE | Not Started | 0% |
+| Phase 3.2: FoE | ✅ Complete | 100% |
 | Phase 3.3: SoE | Not Started | 0% |
 | Phase 3.4: EoE | Not Started | 0% |
 | Phase 3.5: AoE | Not Started | 0% |
@@ -919,9 +950,20 @@ ethercat-master/
 | Phase 5.2: Redundancy Support | ✅ Complete | 100% |
 | Phase 5.3: Examples and Testing | ✅ Complete | 100% |
 
-**Overall Progress**: 100% (7 of 7 core phases complete)
+**Overall Progress**: 100% (8 of 8 core phases complete, 1 of 5 optional protocols complete)
 
-**Current Status**: Phase 5.2 Redundancy Support Complete - Full Three-Layer Implementation ✅
+**Current Status**: Phase 3.2 FoE (File over EtherCAT) Complete ✅
+
+**Phase 3.2: FoE Status** (Complete):
+- ✅ FoE header file (foe.h - 293 lines)
+- ✅ FoE implementation (foe.c - 712 lines)
+- ✅ FoE read/write operations
+- ✅ Firmware update functionality
+- ✅ Progress callback support
+- ✅ Error handling (12 error codes)
+- ✅ FoE demo example (foe_demo.c - 456 lines)
+- ✅ Build integration (0 errors, 0 warnings)
+- ✅ Documentation complete
 
 **Phase 5.2 Status** (Complete):
 - ✅ HAL multi-port support (hal_init_multiport, hal_send_frame_port, hal_receive_frame_port)
@@ -1270,26 +1312,27 @@ ethercat-master/
 Source Files:
   DLL:      11 files
   HAL:      3 files
-  AL:       5 files
+  AL:       6 files (al.c, al_mailbox.c, al_reg.c, al_state.c, coe.c, foe.c)
   Master:   5 files (master.c, scan.c, config.c, dc.c, process_data.c)
-  Examples: 4 files (simple_cyclic.c, process_data_demo.c, benchmark.c, redundancy_demo.c)
-  Total:    24 library files + 4 example files
+  Examples: 5 files (simple_cyclic.c, process_data_demo.c, benchmark.c, redundancy_demo.c, foe_demo.c)
+  Total:    25 library files + 5 example files
 
 Lines of Code:
   DLL:      ~3,500 lines
   HAL:      ~1,100 lines (with multi-port support)
-  AL:       ~2,764 lines (al.c 906 + al_mailbox.c 267 + al_reg.c 393 + al_state.c 333 + coe.c 753)
+  AL:       ~3,476 lines (al.c 906 + al_mailbox.c 267 + al_reg.c 393 + al_state.c 333 + coe.c 753 + foe.c 712)
   Master:   ~3,297 lines (master.c 461 + scan.c 735 + config.c 668 + dc.c 694 + process_data.c 739)
-  Examples: ~1,752 lines (simple_cyclic.c 380 + process_data_demo.c 450 + benchmark.c 490 + redundancy_demo.c 432)
-  Total:    ~12,413 lines
+  Examples: ~2,208 lines (simple_cyclic.c 380 + process_data_demo.c 450 + benchmark.c 490 + redundancy_demo.c 432 + foe_demo.c 456)
+  Total:    ~13,581 lines
 
 Build Status: ✅ Success (0 errors, 0 warnings)
 Output:
-  Library:  build/lib/libethercat.a (534KB)
+  Library:  build/lib/libethercat.a (540KB)
   Examples: build/bin/simple_cyclic (267KB)
             build/bin/process_data_demo (267KB)
             build/bin/benchmark (269KB)
             build/bin/redundancy_demo (142KB)
+            build/bin/foe_demo (279KB)
 ```
 
 ---
@@ -1313,4 +1356,5 @@ Output:
 | 5.4.0 | 2026-01-04 | Claude Code | Updated after Phase 5.2 design completion (Redundancy Support - Stub Implementation) |
 | 5.5.0 | 2026-01-04 | Claude Code | Updated after Phase 5.2 HAL completion (Redundancy Support - Full Multi-Port HAL) |
 | 6.0.0 | 2026-01-04 | Claude Code | Updated after Phase 5.2 completion (Full Redundancy Support - Process Data + Application Layer) |
+| 6.1.0 | 2026-01-04 | Claude Code | Updated after Phase 3.2 completion (FoE - File over EtherCAT Protocol) |
 

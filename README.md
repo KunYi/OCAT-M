@@ -4,7 +4,9 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
 
 ## Project Status
 
-**Current Phase**: Phase 5.2 Complete - Full Redundancy Support (HAL + Process Data + Application Layer) ✅
+**Current Phase**: Phase 3.2 Complete - FoE (File over EtherCAT) Protocol ✅
+
+**Latest Update**: Added FoE protocol for file transfer and firmware updates (712 lines + 456 lines demo)
 
 ### Completed Components
 
@@ -98,7 +100,7 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
     - `al_mailbox_send_port()` - Send mailbox on specific port
     - `al_mailbox_receive_port()` - Receive mailbox from specific port
 
-#### Phase 3 - Application Layer Protocols ✅ (CoE Complete)
+#### Phase 3 - Application Layer Protocols ✅ (CoE + FoE Complete)
 
 ##### Phase 3.1 - CoE (CANopen over EtherCAT) ✅ (100% Complete)
 - **CoE Types and API**:
@@ -132,6 +134,46 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
   - `coe_sdo_upload_expedited()` - Fast read (1-4 bytes)
   - `coe_get_abort_code_string()` - Error descriptions
   - `coe_get_version()` - Version information
+
+##### Phase 3.2 - FoE (File over EtherCAT) ✅ (100% Complete)
+- **FoE Types and API**:
+  - `include/ethercat/foe.h` - FoE type definitions and public API (293 lines)
+  - FoE operation codes (READ, WRITE, DATA, ACK, ERROR, BUSY)
+  - 12 FoE error codes from ETG1000.6
+  - FoE status codes
+  - Progress callback support
+
+- **FoE Implementation**:
+  - `src/al/foe.c` - FoE core implementation (712 lines)
+  - `examples/foe_demo.c` - FoE demonstration (456 lines)
+
+- **Features**:
+  - **File Read** - Read files from slave device ✅
+  - **File Write** - Write files to slave device ✅
+  - **Firmware Update** - Complete firmware update workflow ✅
+  - **Progress Tracking** - Real-time progress callback with percentage ✅
+  - **Packet-based Transfer** - Up to 512 bytes per packet ✅
+  - **BUSY Handling** - Automatic retry with configurable delay ✅
+  - **Timeout Control** - Configurable timeouts for operations ✅
+  - **Error Handling** - 12 error codes with descriptions ✅
+
+- **API Functions**:
+  - `foe_read()` - Read file from slave
+  - `foe_write()` - Write file to slave
+  - `foe_firmware_update()` - Firmware update with default filename
+  - `foe_firmware_update_ex()` - Firmware update with custom filename
+  - `foe_check_support()` - Check if slave supports FoE
+  - `foe_get_error_string()` - Get error description
+  - `foe_get_status_string()` - Get status description
+  - `foe_get_opcode_name()` - Get opcode name
+
+- **Demo Features**:
+  - Check FoE support
+  - Read file from slave
+  - Write file to slave
+  - Large file transfer (128KB)
+  - Firmware update workflow
+  - Error handling demonstration
 
 - **HAL Time Functions** (Added for timeout support):
   - `hal_get_time_ns()` - Get current time in nanoseconds
