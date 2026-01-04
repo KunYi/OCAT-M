@@ -4,7 +4,7 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
 
 ## Project Status
 
-**Current Phase**: Phase 5.1 Complete - Process Data and Cyclic Operation ✅
+**Current Phase**: Phase 5.2 Complete - Full Redundancy Support (HAL + Process Data + Application Layer) ✅
 
 ### Completed Components
 
@@ -48,19 +48,26 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
 ##### Phase 1.10 - Hardware Abstraction Layer ✅
 - **HAL Interface**:
   - `include/ethercat/hal_types.h` - HAL type definitions
-  - `include/ethercat/hal.h` - HAL public API
+  - `include/ethercat/hal.h` - HAL public API (includes multi-port support)
   - `src/hal/hal_internal.h` - HAL internal definitions
 
 - **Platform Implementations**:
-  - `src/hal/hal.c` - HAL core implementation
-  - `src/hal/hal_linux.c` - Linux raw socket implementation
-  - `src/hal/hal_stub.c` - Stub implementation for testing
+  - `src/hal/hal.c` - HAL core implementation (with multi-port support)
+  - `src/hal/hal_linux.c` - Linux raw socket implementation (dual-port support)
+  - `src/hal/hal_stub.c` - Stub implementation for testing (dual-port support)
 
 - **Features**:
   - Platform abstraction for frame send/receive
   - Support for multiple platforms (Linux, Windows, FreeRTOS, Bare-metal)
   - Frame buffer management
   - Statistics tracking
+  - **Multi-port support (redundancy)**: 6 functions for dual-port operation
+    - `hal_init_multiport()` - Initialize two network interfaces
+    - `hal_send_frame_port()` - Send on specific port
+    - `hal_receive_frame_port()` - Receive from specific port
+    - `hal_is_port_link_up()` - Check port link status
+    - `hal_get_port_statistics()` - Get per-port statistics
+    - `hal_get_port_count()` - Get number of ports
 
 #### Phase 2 - Application Layer Services ✅ (100% Complete)
 
@@ -77,7 +84,7 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
 
 ##### Phase 2.2 - State Machine ✅
 - **Implementation**:
-  - `src/al/al.c` - AL core implementation (412 lines)
+  - `src/al/al.c` - AL core implementation (906 lines, includes redundancy support)
   - `src/al/al_state.c` - State machine implementation (267 lines)
 
 - **Features**:
@@ -85,6 +92,11 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
   - State change callbacks
   - Timeout handling
   - Error recovery
+  - **Port-specific state control (redundancy support)**:
+    - `al_request_state_port()` - Request AL state on specific port
+    - `al_get_state_port()` - Get AL state from specific port
+    - `al_mailbox_send_port()` - Send mailbox on specific port
+    - `al_mailbox_receive_port()` - Receive mailbox from specific port
 
 #### Phase 3 - Application Layer Protocols ✅ (CoE Complete)
 
@@ -225,7 +237,7 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
   - Block data transfer
   - SII (EEPROM) interface (reserved)
 
-#### Phase 5 - Process Data and Cyclic Operation ✅ (Phase 5.1 Complete)
+#### Phase 5 - Process Data and Cyclic Operation ✅ (Complete with Redundancy)
 
 ##### Phase 5.1 - Process Data Core Infrastructure ✅
 - **Process Data Types and API**:
@@ -234,10 +246,10 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
   - Process data image structure
   - Slave mapping structure
   - Statistics structure
-  - Redundancy types (for Phase 5.2)
+  - Redundancy types (Phase 5.2)
 
 - **Process Data Implementation**:
-  - `src/master/process_data.c` - Process data implementation (470 lines)
+  - `src/master/process_data.c` - Process data implementation (739 lines, includes redundancy)
 
 - **Features**:
   - Process data image allocation/deallocation
@@ -246,13 +258,18 @@ A clean-room implementation of an EtherCAT Master stack in C11 for embedded syst
   - Working counter validation
   - Cycle time statistics (min/max/avg)
   - Error tracking (WKC errors, timeouts)
-  - Redundancy stubs for Phase 5.2
+  - Port-specific data exchange (redundancy)
+  - Port switching and health monitoring (redundancy)
 
 - **API Functions**:
   - `pd_init()` / `pd_shutdown()` - Module lifecycle
   - `pd_allocate_image()` / `pd_free_image()` - Image management
   - `pd_map_slave()` - Slave mapping
   - `pd_exchange()` - LRW data exchange
+  - `pd_exchange_port()` - Port-specific LRW exchange (redundancy)
+  - `pd_switch_port()` - Port switching (redundancy)
+  - `pd_check_port_health()` - Port health monitoring (redundancy)
+  - `pd_get_port_status()` - Port status retrieval (redundancy)
   - `pd_validate_wkc()` - Working counter validation
   - `pd_get_statistics()` / `pd_reset_statistics()` - Statistics
 
@@ -315,7 +332,7 @@ Output:
 - **Spec.md** - Technical specification (complete for Phase 1-2)
 - **Plan.md** - Implementation plan (5 phases with milestones)
 - **TESTING.md** - Testing and benchmarking guide
-- **REDUNDANCY.md** - Redundancy support design document
+- **REDUNDANCY.md** - Redundancy support design and implementation (complete)
 
 ## Project Structure
 
@@ -398,7 +415,8 @@ ethercat-master/
     ├── README.md                # Example documentation
     ├── simple_cyclic.c          # Simple cyclic I/O example
     ├── process_data_demo.c      # Process data demonstration
-    └── benchmark.c              # Performance benchmark tool
+    ├── benchmark.c              # Performance benchmark tool
+    └── redundancy_demo.c        # Redundancy demonstration
 ```
 
 ## Building
@@ -548,6 +566,9 @@ sudo ./build/bin/simple_cyclic
 
 # Run process data demonstration (requires root)
 sudo ./build/bin/process_data_demo
+
+# Run redundancy demonstration with dual ports (requires root)
+sudo ./build/bin/redundancy_demo eth0 eth1
 ```
 
 ---
